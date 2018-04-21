@@ -8,14 +8,10 @@
 
     <EditText
         android:id="@+id/message"
-        android:layout_width="200dp"
-        android:layout_height="200dp"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
         android:ems="10"
         android:inputType="none"
         android:text="Please select a .fmear file from the file system"
-        android:textAlignment="center"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:textAlignment="center" />
 </android.support.constraint.ConstraintLayout>
