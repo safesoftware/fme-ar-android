@@ -32,7 +32,6 @@ import com.google.ar.core.examples.java.common.rendering.ObjectRenderer;
 import com.google.ar.core.examples.java.common.rendering.PlaneRenderer;
 import com.google.ar.core.examples.java.common.rendering.PointCloudRenderer;
 import com.google.ar.core.examples.java.helloar.HelloArActivity;
-import com.google.ar.core.examples.java.helloar.R;
 import com.google.ar.core.exceptions.CameraNotAvailableException;
 import com.google.ar.core.exceptions.UnavailableApkTooOldException;
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
@@ -80,6 +79,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     // Anchors created from taps used for object placing.
     private final ArrayList<Anchor> anchors = new ArrayList<>();
 
+    // If this boolean is set to true, onDrawFrame will try to load the obj files from the temp
+    // directory.
+    private boolean datasetDrawRequested = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -99,11 +102,23 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         surfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
 
         installRequested = false;
+
+        // Initialize the temp directory by removing previous content and recreate the directory
+        initDirectory(tempDirectory());
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+
+        // TODO: Selecting a fmear file from the Android file system will resume on this activity.
+        // However, we can end up in this onResume function even no file is selected. We should
+        // handle both cases.
+        // Get the data from the intent and unzip the FME AR dataset into the temp directory.
+        // If we successfully extracted the content from a .fmear file, we will set the boolean
+        // datasetDrawRequested to true. Then, in onDrawFrame, we load the obj and update the
+        // geometry.
+        datasetDrawRequested = extractDatasetFromIntent();
 
         if (session == null) {
             Exception exception = null;
@@ -213,8 +228,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             planeRenderer.createOnGlThread(/*context=*/ this, "models/trigrid.png");
             pointCloudRenderer.createOnGlThread(/*context=*/ this);
 
-            virtualObject.createOnGlThread(/*context=*/ this, "models/andy.obj", "models/andy.png");
-            virtualObject.setMaterialProperties(0.0f, 2.0f, 0.5f, 6.0f);
+            // Create the shaders and the program first. We will load the obj into this object later
+            virtualObject.createProgram(this);
 
             virtualObjectShadow.createOnGlThread(
                     /*context=*/ this, "models/andy_shadow.obj", "models/andy_shadow.png");
@@ -338,6 +353,26 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // during calls to session.update() as ARCore refines its estimate of the world.
                 anchor.getPose().toMatrix(anchorMatrix, 0);
 
+                // Load the new obj files if any
+                if (datasetDrawRequested) {
+                    datasetDrawRequested = false;
+                    List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
+                    if (!objFiles.isEmpty()) {
+                        // TODO: We need to render all the obj files instead of just the first one
+                        File firstObjFile = objFiles.get(0);
+
+                        try {
+
+                            virtualObject.loadObj(this, firstObjFile);
+                            //                virtualObject.createOnGlThread(/*context=*/ this, "models/andy.obj", "models/andy.png");
+                            //                virtualObject.setMaterialProperties(0.0f, 2.0f, 0.5f, 6.0f);
+
+                        } catch (IOException e) {
+                            Log.e(TAG, "Failed to read an asset file", e);
+                        }
+                    }
+                }
+
                 // Update and draw the model and its shadow.
                 virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
                 virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
@@ -351,44 +386,36 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         }
     }
 
-//    // ---------------------------------------------------------------------------------------------
-//    @Override
-//    protected void onCreate(Bundle savedInstanceState) {
-//        super.onCreate(savedInstanceState);
-//        setContentView(R.layout.activity_ar);
-//    }
-//
-//    // ---------------------------------------------------------------------------------------------
-//    @Override
-//    public void onResume() {
-//        super.onResume();  // Always call the superclass method first
-//
-//        // TODO: Selecting a fmear file from the Android file system will resume on this activity.
-//        // However, we can end up in this onResume function even no file is selected. We should
-//        // handle both cases.
-//
-//        // Get the data from the intent and unzip the content
-//        Intent intent = getIntent();
-//        if (intent != null) {
-//            String action = intent.getAction();
-//            if (action.equals(Intent.ACTION_VIEW)) {
-//                Uri uri = intent.getData();
-//
-//                // Get the temp directory
-//                File tempDir = tempDirectory();
-//
-//                // Unzip the content to the temporary directory
-//                unzipContent(uri, tempDir);
-//
-//                // Find all the .obj files
-//                List<File> objFiles = new FileFinder(".obj").find(tempDir);
-//                for (File file : objFiles) {
-//                    Log.d("FME AR", "OBJ File: " + file.toString());
-//                }
-//
-//            }
-//        }
-//    }
+    // ---------------------------------------------------------------------------------------------
+    // This function gets the data from the view intent. If the data exists, this function will
+    // unzip the data, assuming it's a .fmear file, into the temp directory named "fmear" in the
+    // default cache directory.
+    private boolean extractDatasetFromIntent() {
+        boolean result = false;
+        Intent intent = getIntent();
+        if (intent != null) {
+            String action = intent.getAction();
+            if (action.equals(Intent.ACTION_VIEW)) {
+                Uri uri = intent.getData();
+
+                // Get the temp directory
+                File tempDir = tempDirectory();
+                initDirectory(tempDir);
+
+                // Unzip the content to the temporary directory
+                result = unzipContent(uri, tempDir);
+
+                // Find all the .obj files
+                List<File> objFiles = new FileFinder(".obj").find(tempDir);
+                for (File file : objFiles) {
+                    Log.d("FME AR", "OBJ File: " + file.toString());
+                }
+
+            }
+        }
+
+        return result;
+    }
 
     // ---------------------------------------------------------------------------------------------
     // This function delete all files and sub-directories of the specified file.
@@ -407,20 +434,24 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         File cacheDir = getCacheDir();
 
         // Find out if we already have the directory in the cache dir
-        File fmearDir = new File(cacheDir.toString(), "fmear");
+        return new File(cacheDir.toString(), "fmear");
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // This function deletes everything in dir including itself and then creates dir again.
+    private void initDirectory(File dir) {
         try {
             // Delete the fmear directory from previous runs and
             // recreate it so that it's empty
-            if (fmearDir.exists()) {
-                deleteFileRecursively(fmearDir);
+            if (dir.exists()) {
+                deleteFileRecursively(dir);
             }
-            fmearDir.mkdir();
+            dir.mkdir();
         } catch (SecurityException e) {
-            Log.e("FME AR", "Failed to create the temp directory \"" + fmearDir.toString() + "\"");
+            Log.e("FME AR", "Failed to create the temp directory \"" + dir.toString() + "\"");
         }
 
-        Log.i("FME AR", "Temp directory: \"" + fmearDir.toString() + "\"");
-        return fmearDir;
+        Log.i("FME AR", "Temp directory: \"" + dir.toString() + "\"");
     }
 
     // ---------------------------------------------------------------------------------------------

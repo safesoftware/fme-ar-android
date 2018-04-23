@@ -17,6 +17,7 @@ package com.google.ar.core.examples.java.common.rendering;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLUtils;
 import android.opengl.Matrix;
@@ -24,6 +25,8 @@ import de.javagl.obj.Obj;
 import de.javagl.obj.ObjData;
 import de.javagl.obj.ObjReader;
 import de.javagl.obj.ObjUtils;
+
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -103,7 +106,152 @@ public class ObjectRenderer {
   private float specular = 1.0f;
   private float specularPower = 6.0f;
 
-  public ObjectRenderer() {}
+  private boolean initialized = false;
+
+  public ObjectRenderer() {
+    Matrix.setIdentityM(modelMatrix, 0);
+  }
+
+  // The original createOnGlThread create the shaders, the program, and the geometries. This
+  // createProgram function only creates the shaders and the program. We can call this function
+  // once in onSurfaceCreated. Then, when we load a dataset, we can call the following loadObj
+  // function, which defines the geometries.
+  public void createProgram(Context context)
+          throws IOException {
+
+    final int vertexShader =
+            ShaderUtil.loadGLShader(TAG, context, GLES20.GL_VERTEX_SHADER, VERTEX_SHADER_NAME);
+    final int fragmentShader =
+            ShaderUtil.loadGLShader(TAG, context, GLES20.GL_FRAGMENT_SHADER, FRAGMENT_SHADER_NAME);
+
+    program = GLES20.glCreateProgram();
+    GLES20.glAttachShader(program, vertexShader);
+    GLES20.glAttachShader(program, fragmentShader);
+    GLES20.glLinkProgram(program);
+    GLES20.glUseProgram(program);
+
+    ShaderUtil.checkGLError(TAG, "Program creation");
+
+    modelViewUniform = GLES20.glGetUniformLocation(program, "u_ModelView");
+    modelViewProjectionUniform = GLES20.glGetUniformLocation(program, "u_ModelViewProjection");
+
+    positionAttribute = GLES20.glGetAttribLocation(program, "a_Position");
+    normalAttribute = GLES20.glGetAttribLocation(program, "a_Normal");
+    texCoordAttribute = GLES20.glGetAttribLocation(program, "a_TexCoord");
+
+    textureUniform = GLES20.glGetUniformLocation(program, "u_Texture");
+
+    lightingParametersUniform = GLES20.glGetUniformLocation(program, "u_LightingParameters");
+    materialParametersUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters");
+    colorCorrectionParameterUniform =
+            GLES20.glGetUniformLocation(program, "u_ColorCorrectionParameters");
+
+    ShaderUtil.checkGLError(TAG, "Program parameters");
+
+    Matrix.setIdentityM(modelMatrix, 0);
+
+  }
+
+  // This function updates the geometry information in the context.
+  public void loadObj(Context context, File objFile)
+          throws IOException {
+
+      // TODO: Temporarily using this boolean to decide whether we want to draw or not.
+      initialized = true;
+
+// TODO: We should follow https://github.com/javagl/ObjSamples/blob/master/src/main/java/de/javagl/obj/samples/ObjSample_13_RenderByMaterial.java
+// to render the OBJ by material. It's possible to have multiple textures in one OBJ.
+//    // Read the texture.
+//    Bitmap textureBitmap =
+//            BitmapFactory.decodeStream(context.getAssets().open(diffuseTextureAssetName));
+//
+//    GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+//    GLES20.glGenTextures(textures.length, textures, 0);
+//    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textures[0]);
+//
+//    GLES20.glTexParameteri(
+//            GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR_MIPMAP_LINEAR);
+//    GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+//    GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, textureBitmap, 0);
+//    GLES20.glGenerateMipmap(GLES20.GL_TEXTURE_2D);
+//    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+//
+//    textureBitmap.recycle();
+//
+//    ShaderUtil.checkGLError(TAG, "Texture loading");
+
+    // Read the obj file.
+    InputStream objInputStream = context.getContentResolver().openInputStream(Uri.fromFile(objFile));
+    Obj obj = ObjReader.read(objInputStream);
+
+    // Prepare the Obj so that its structure is suitable for
+    // rendering with OpenGL:
+    // 1. Triangulate it
+    // 2. Make sure that texture coordinates are not ambiguous
+    // 3. Make sure that normals are not ambiguous
+    // 4. Convert it to single-indexed data
+    obj = ObjUtils.convertToRenderable(obj);
+
+    // OpenGL does not use Java arrays. ByteBuffers are used instead to provide data in a format
+    // that OpenGL understands.
+
+    // Obtain the data from the OBJ, as direct buffers:
+    IntBuffer wideIndices = ObjData.getFaceVertexIndices(obj, 3);
+    FloatBuffer vertices = ObjData.getVertices(obj);
+    FloatBuffer texCoords = ObjData.getTexCoords(obj, 2);
+    FloatBuffer normals = ObjData.getNormals(obj);
+
+    // Convert int indices to shorts for GL ES 2.0 compatibility
+    ShortBuffer indices =
+            ByteBuffer.allocateDirect(2 * wideIndices.limit())
+                    .order(ByteOrder.nativeOrder())
+                    .asShortBuffer();
+    while (wideIndices.hasRemaining()) {
+      indices.put((short) wideIndices.get());
+    }
+    indices.rewind();
+
+    int[] buffers = new int[2];
+    GLES20.glGenBuffers(2, buffers, 0);
+    vertexBufferId = buffers[0];
+    indexBufferId = buffers[1];
+
+    // Load vertex buffer
+    verticesBaseAddress = 0;
+    texCoordsBaseAddress = verticesBaseAddress + 4 * vertices.limit();
+    normalsBaseAddress = texCoordsBaseAddress + 4 * texCoords.limit();
+    final int totalBytes = normalsBaseAddress + 4 * normals.limit();
+
+    GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vertexBufferId);
+    GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, totalBytes, null, GLES20.GL_STATIC_DRAW);
+
+    if (vertices.limit() > 0) {
+      GLES20.glBufferSubData(
+              GLES20.GL_ARRAY_BUFFER, verticesBaseAddress, 4 * vertices.limit(), vertices);
+    }
+
+    if (texCoords.limit() > 0) {
+      GLES20.glBufferSubData(
+              GLES20.GL_ARRAY_BUFFER, texCoordsBaseAddress, 4 * texCoords.limit(), texCoords);
+    }
+
+    if (normals.limit() > 0) {
+      GLES20.glBufferSubData(
+              GLES20.GL_ARRAY_BUFFER, normalsBaseAddress, 4 * normals.limit(), normals);
+    }
+
+    GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+
+    // Load index buffer
+    GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, indexBufferId);
+    indexCount = indices.limit();
+    GLES20.glBufferData(
+            GLES20.GL_ELEMENT_ARRAY_BUFFER, 2 * indexCount, indices, GLES20.GL_STATIC_DRAW);
+    GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    ShaderUtil.checkGLError(TAG, "OBJ buffer load");
+
+  }
 
   /**
    * Creates and initializes OpenGL resources needed for rendering the model.
@@ -114,6 +262,10 @@ public class ObjectRenderer {
    */
   public void createOnGlThread(Context context, String objAssetName, String diffuseTextureAssetName)
       throws IOException {
+
+    // TODO: Temporarily using this boolean to decide whether we want to draw or not.
+    initialized = true;
+
     final int vertexShader =
         ShaderUtil.loadGLShader(TAG, context, GLES20.GL_VERTEX_SHADER, VERTEX_SHADER_NAME);
     final int fragmentShader =
@@ -243,6 +395,11 @@ public class ObjectRenderer {
    * @see android.opengl.Matrix
    */
   public void updateModelMatrix(float[] modelMatrix, float scaleFactor) {
+
+    if (!initialized) {
+      return;
+    }
+
     float[] scaleMatrix = new float[16];
     Matrix.setIdentityM(scaleMatrix, 0);
     scaleMatrix[0] = scaleFactor;
@@ -281,6 +438,10 @@ public class ObjectRenderer {
    * @see android.opengl.Matrix
    */
   public void draw(float[] cameraView, float[] cameraPerspective, float[] colorCorrectionRgba) {
+
+    if (!initialized) {
+      return;
+    }
 
     ShaderUtil.checkGLError(TAG, "Before draw");
 
