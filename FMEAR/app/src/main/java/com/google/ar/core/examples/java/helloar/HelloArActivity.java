@@ -16,6 +16,7 @@
 
 package com.google.ar.core.examples.java.helloar;
 
+import com.safe.fmear.R;
 
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
