@@ -24,7 +24,17 @@ public class ARActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_ar);
+    }
 
+    // ---------------------------------------------------------------------------------------------
+    @Override
+    public void onResume() {
+        super.onResume();  // Always call the superclass method first
+
+        // TODO: Selecting a fmear file from the Android file system will resume on this activity.
+        // However, we can end up in this onResume function even no file is selected. We should
+        // handle both cases.
+        
         // Get the data from the intent and unzip the content
         Intent intent = getIntent();
         if (intent != null) {
