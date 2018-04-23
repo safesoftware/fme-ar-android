@@ -48,7 +48,7 @@
 
     </application>
 
-
+    <!-- The following application was the original main screen in the Google ARCore sample code -->
     <!--<application-->
         <!--android:allowBackup="false"-->
         <!--android:icon="@drawable/ic_launcher"-->
