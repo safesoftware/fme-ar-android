@@ -387,8 +387,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Multiply anchorMatrix by xAxisRotationMatrix, store the result in resultMatrix
                 Matrix.multiplyMM(resultMatrix, 0, anchorMatrix, 0, xAxisRotationMatrix, 0);
                 // Update and draw the model and its shadow.
-                virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
-                virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
+                virtualObject.updateModelMatrix(resultMatrix, 1);
+                virtualObjectShadow.updateModelMatrix(resultMatrix, scaleFactor);
                 virtualObject.draw(viewmtx, projmtx, colorCorrectionRgba);
                 virtualObjectShadow.draw(viewmtx, projmtx, colorCorrectionRgba);
             }
