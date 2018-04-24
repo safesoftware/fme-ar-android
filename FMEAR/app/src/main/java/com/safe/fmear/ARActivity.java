@@ -378,17 +378,11 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Angle to rotate model 270 degrees around the x axis, this is needed to translate
                 // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
                 // the z-axis is flat while the y-axis points up
-                float cosAngle = (float) Math.cos(FME_TO_OPENGL_ROTATION_ANGLE);
-                float sinAngle = (float) Math.sin(FME_TO_OPENGL_ROTATION_ANGLE);
-
-                float[] xAxisRotationMatrix = {1,0,0,0, 0,cosAngle,sinAngle,0, 0,-sinAngle,cosAngle,0, 0,0,0,1 };
-
-                float[] resultMatrix = new float[16];
                 // Multiply anchorMatrix by xAxisRotationMatrix, store the result in resultMatrix
-                Matrix.multiplyMM(resultMatrix, 0, anchorMatrix, 0, xAxisRotationMatrix, 0);
+                Matrix.rotateM(anchorMatrix, 0, 270, 1,0,0);
                 // Update and draw the model and its shadow.
-                virtualObject.updateModelMatrix(resultMatrix, 1);
-                virtualObjectShadow.updateModelMatrix(resultMatrix, scaleFactor);
+                virtualObject.updateModelMatrix(anchorMatrix, 1);
+                virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
                 virtualObject.draw(viewmtx, projmtx, colorCorrectionRgba);
                 virtualObjectShadow.draw(viewmtx, projmtx, colorCorrectionRgba);
             }
