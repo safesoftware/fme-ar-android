@@ -19,10 +19,30 @@
     android:layout_height="match_parent"
     tools:context="com.google.ar.core.examples.java.helloar.HelloArActivity">
 
-  <android.opengl.GLSurfaceView
-      android:id="@+id/surfaceview"
-      android:layout_width="fill_parent"
-      android:layout_height="fill_parent"
-      android:layout_gravity="top"/>
+    <android.opengl.GLSurfaceView
+        android:id="@+id/surfaceview"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_gravity="top" />
+
+    <Button
+        android:id="@+id/browse_button"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentTop="true"
+        android:layout_marginEnd="13dp"
+        android:layout_marginTop="13dp"
+        android:background="@drawable/rounded_button"
+        android:elevation="0dp"
+        android:gravity="center"
+        android:onClick="showPopup"
+        android:text="@string/vertical_ellipsis"
+        android:textColor="#000"
+        android:textSize="26sp"
+        android:textStyle="bold"
+        android:typeface="serif" />
 
 </RelativeLayout>
