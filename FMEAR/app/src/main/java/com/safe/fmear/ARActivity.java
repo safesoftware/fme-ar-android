@@ -272,8 +272,14 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             // compared to frame rate.
 
             MotionEvent tap = tapHelper.poll();
+            if (anchors.size() == 0) {
+                // TODO: Add functionality to detect first stable horizontal/vertical plane and
+                // place an anchor.
+            }
             if (tap != null && camera.getTrackingState() == TrackingState.TRACKING) {
+                // Clears previous anchors; new anchor with each tap.
                 anchors.clear();
+
                 for (HitResult hit : frame.hitTest(tap)) {
                     // Check if any plane was hit, and if it was hit inside the plane polygon
                     Trackable trackable = hit.getTrackable();
@@ -282,13 +288,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                             || (trackable instanceof Point
                             && ((Point) trackable).getOrientationMode()
                             == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL)) {
-                        // Hits are sorted by depth. Consider only closest hit on a plane or oriented point.
-                        // Cap the number of objects created. This avoids overloading both the
-                        // rendering system and ARCore.
-                        if (anchors.size() >= 20) {
-                            anchors.get(0).detach();
-                            anchors.remove(0);
-                        }
                         // Adding an Anchor tells ARCore that it should track this position in
                         // space. This anchor is created on the Plane to place the 3D model
                         // in the correct position relative both to the world and to the plane.
