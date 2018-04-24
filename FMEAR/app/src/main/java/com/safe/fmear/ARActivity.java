@@ -380,7 +380,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // the z-axis is flat while the y-axis points up
                 Matrix.rotateM(anchorMatrix, 0, FME_TO_OPENGL_ROTATION_ANGLE, 1, 0, 0);
                 // Update and draw the model and its shadow.
-                virtualObject.updateModelMatrix(anchorMatrix, 1);
+                virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
                 virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
                 virtualObject.draw(viewmtx, projmtx, colorCorrectionRgba);
                 virtualObjectShadow.draw(viewmtx, projmtx, colorCorrectionRgba);
