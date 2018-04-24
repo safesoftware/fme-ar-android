@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
+import android.opengl.Matrix;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -373,6 +374,18 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     }
                 }
 
+                // Angle to rotate model 270 degrees around the x axis, this is needed to translate
+                // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
+                // the z-axis is flat while the y-axis points up
+                float angle = (float) 4.71239;
+                float cosAngle = (float) Math.cos(angle);
+                float sinAngle = (float) Math.sin(angle);
+
+                float[] xAxisRotationMatrix = {1,0,0,0, 0,cosAngle,sinAngle,0, 0,-sinAngle,cosAngle,0, 0,0,0,1 };
+
+                float[] resultMatrix = new float[16];
+                // Multiply anchorMatrix by xAxisRotationMatrix, store the result in resultMatrix
+                Matrix.multiplyMM(resultMatrix, 0, anchorMatrix, 0, xAxisRotationMatrix, 0);
                 // Update and draw the model and its shadow.
                 virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
                 virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
