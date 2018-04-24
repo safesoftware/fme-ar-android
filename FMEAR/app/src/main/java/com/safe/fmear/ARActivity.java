@@ -273,6 +273,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
             MotionEvent tap = tapHelper.poll();
             if (tap != null && camera.getTrackingState() == TrackingState.TRACKING) {
+                anchors.clear();
                 for (HitResult hit : frame.hitTest(tap)) {
                     // Check if any plane was hit, and if it was hit inside the plane polygon
                     Trackable trackable = hit.getTrackable();
