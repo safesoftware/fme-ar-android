@@ -57,6 +57,7 @@ import javax.microedition.khronos.opengles.GL10;
 // ARActivity
 public class ARActivity extends AppCompatActivity implements GLSurfaceView.Renderer {
     private static final String TAG = HelloArActivity.class.getSimpleName();
+    private static final float FME_TO_OPENGL_ROTATION_ANGLE = (float) 4.71239;
 
     // Rendering. The Renderers are created here, and initialized when the GL surface is created.
     private GLSurfaceView surfaceView;
@@ -377,9 +378,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Angle to rotate model 270 degrees around the x axis, this is needed to translate
                 // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
                 // the z-axis is flat while the y-axis points up
-                float angle = (float) 4.71239;
-                float cosAngle = (float) Math.cos(angle);
-                float sinAngle = (float) Math.sin(angle);
+                float cosAngle = (float) Math.cos(FME_TO_OPENGL_ROTATION_ANGLE);
+                float sinAngle = (float) Math.sin(FME_TO_OPENGL_ROTATION_ANGLE);
 
                 float[] xAxisRotationMatrix = {1,0,0,0, 0,cosAngle,sinAngle,0, 0,-sinAngle,cosAngle,0, 0,0,0,1 };
 
