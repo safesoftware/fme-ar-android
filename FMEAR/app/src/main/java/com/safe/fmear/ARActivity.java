@@ -1,5 +1,6 @@
 package com.safe.fmear;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.opengl.GLES20;
@@ -8,7 +9,11 @@ import android.opengl.Matrix;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.MotionEvent;
+import android.view.View;
+import android.widget.PopupMenu;
 import android.widget.Toast;
 
 import com.google.ar.core.Anchor;
@@ -85,6 +90,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     // directory.
     private boolean datasetDrawRequested = false;
 
+    private static final int READ_REQUEST_CODE = 1337;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -109,6 +116,26 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         initDirectory(tempDirectory());
     }
 
+    public void showPopup(View v) {
+        final View view = v;
+        PopupMenu popup = new PopupMenu(this, view);
+        popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+            @Override
+            public boolean onMenuItemClick(MenuItem item) {
+                switch (item.getItemId()) {
+                    case R.id.browse_files:
+                        performFileSearch();
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+        });
+        MenuInflater inflater = popup.getMenuInflater();
+        inflater.inflate(R.menu.actions, popup.getMenu());
+        popup.show();
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -120,7 +147,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         // If we successfully extracted the content from a .fmear file, we will set the boolean
         // datasetDrawRequested to true. Then, in onDrawFrame, we load the obj and update the
         // geometry.
-        datasetDrawRequested = extractDatasetFromIntent();
+//        performFileSearch();
+        if (!datasetDrawRequested) {
+            datasetDrawRequested = extractDatasetFromIntent(null);
+        }
 
         if (session == null) {
             Exception exception = null;
@@ -392,16 +422,67 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         }
     }
 
+    /**
+     * Fires an intent to spin up the "file chooser" UI and select an image.
+     */
+    public void performFileSearch() {
+
+        // BEGIN_INCLUDE (use_open_document_intent)
+        // ACTION_OPEN_DOCUMENT is the intent to choose a file via the system's file browser.
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+
+        // Filter to only show results that can be "opened", such as a file (as opposed to a list
+        // of contacts or timezones)
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+
+        // To search for all documents available via installed storage providers, it would be
+        // "*/*".
+//      TODO: The following MIME type filter is not correct. It allows all files
+//      to be opened in the ARActivity, even files other than .fmear.
+        intent.setType("application/*");
+
+        startActivityForResult(intent, READ_REQUEST_CODE);
+        // END_INCLUDE (use_open_document_intent)
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
+        Log.i(TAG, "Received an \"Activity Result\"");
+        // BEGIN_INCLUDE (parse_open_document_response)
+        // The ACTION_OPEN_DOCUMENT intent was sent with the request code READ_REQUEST_CODE.
+        // If the request code seen here doesn't match, it's the response to some other intent,
+        // and the below code shouldn't run at all.
+
+        if (requestCode == READ_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
+            // The document selected by the user won't be returned in the intent.
+            // Instead, a URI to that document will be contained in the return intent
+            // provided to this method as a parameter.  Pull that uri using "resultData.getData()"
+            Uri uri = null;
+            if (resultData != null) {
+                uri = resultData.getData();
+                resultData.setAction(Intent.ACTION_OPEN_DOCUMENT);
+                Log.i(TAG, "Uri: " + uri.toString());
+                datasetDrawRequested = extractDatasetFromIntent(resultData);
+            }
+            // END_INCLUDE (parse_open_document_response)
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------
     // This function gets the data from the view intent. If the data exists, this function will
     // unzip the data, assuming it's a .fmear file, into the temp directory named "fmear" in the
     // default cache directory.
-    private boolean extractDatasetFromIntent() {
+    private boolean extractDatasetFromIntent(Intent resultData) {
         boolean result = false;
-        Intent intent = getIntent();
+        Intent intent;
+        if (resultData != null) {
+            intent = resultData;
+        } else {
+            intent = getIntent();
+        }
         if (intent != null) {
             String action = intent.getAction();
-            if (action.equals(Intent.ACTION_VIEW)) {
+            if (action.equals(Intent.ACTION_VIEW) || action.equals(Intent.ACTION_OPEN_DOCUMENT)) {
                 Uri uri = intent.getData();
 
                 // Get the temp directory
@@ -416,7 +497,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 for (File file : objFiles) {
                     Log.d("FME AR", "OBJ File: " + file.toString());
                 }
-
             }
         }
 
