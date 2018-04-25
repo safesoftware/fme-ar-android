@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
+import android.opengl.Matrix;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -56,6 +57,7 @@ import javax.microedition.khronos.opengles.GL10;
 // ARActivity
 public class ARActivity extends AppCompatActivity implements GLSurfaceView.Renderer {
     private static final String TAG = HelloArActivity.class.getSimpleName();
+    private static final float FME_TO_OPENGL_ROTATION_ANGLE = (float) 270;
 
     // Rendering. The Renderers are created here, and initialized when the GL surface is created.
     private GLSurfaceView surfaceView;
@@ -373,6 +375,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     }
                 }
 
+                // Rotate model 270 degrees around the x axis, this is needed to translate
+                // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
+                // the z-axis is flat while the y-axis points up
+                Matrix.rotateM(anchorMatrix, 0, FME_TO_OPENGL_ROTATION_ANGLE, 1, 0, 0);
                 // Update and draw the model and its shadow.
                 virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
                 virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
