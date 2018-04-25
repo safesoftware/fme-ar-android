@@ -216,6 +216,47 @@ public class ObjectRenderer {
     vertexBufferId = buffers[0];
     indexBufferId = buffers[1];
 
+
+    // Move data from float buffer (vertices) to float array (vertexData)
+    float[] vertexData = new float[vertices.remaining()];
+    vertices.get(vertexData);
+
+    boolean normalizationRequired = false;
+    float max = 0;
+    float min = 0;
+    // Find out whether or not we need to normalize our data,
+    // while we're at it, why not find the max and min for the
+    // potential future normalization operation
+    for(int i=0; i < vertexData.length; i++)
+    {
+      if(i == 0)
+      {
+        // Initialize max and min
+        max = vertexData[i];
+        min = vertexData[i];
+      }
+      max = Math.max(max, vertexData[i]);
+      min = Math.min(min, vertexData[i]);
+
+      if(vertexData[i] > 1.0 || vertexData[i] < -1.0)
+      {
+        normalizationRequired = true;
+      }
+    }
+
+    // Normalize data between -1.0 and 1.0
+    if(normalizationRequired)
+    {
+      for(int i=0; i<vertexData.length; i++)
+      {
+        vertexData[i] = 2*((vertexData[i] - min)/(max-min)) - 1;
+      }
+    }
+    // Put the normalized data into the floatBuffer
+    vertices.clear();
+    vertices.put(vertexData);
+    vertices.position(0); // Reset our position
+
     // Load vertex buffer
     verticesBaseAddress = 0;
     texCoordsBaseAddress = verticesBaseAddress + 4 * vertices.limit();
