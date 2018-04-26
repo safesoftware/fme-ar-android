@@ -184,10 +184,13 @@ public class ObjectRenderer {
         for (Map.Entry<String, Obj> entry : materialToObjMap.entrySet()) {
           String materialName = entry.getKey();
           MtlAndTexture mtlAndTexture = materialsByName.get(materialName);
-          Mtl mtl = mtlAndTexture.getMtl();
-          File textureFile = mtlAndTexture.getTextureFile();
+          Mtl mtl = null;
+          if(mtlAndTexture != null) {
+            mtl = mtlAndTexture.getMtl();
+            File textureFile = mtlAndTexture.getTextureFile();
 
-          textures[0] = loadTexture(context, textureFile);
+            textures[0] = loadTexture(context, textureFile);
+          }
           renderObj(entry.getValue(), mtl);
         }
       } else if (numMaterialGroups == 1) {
@@ -304,13 +307,15 @@ public class ObjectRenderer {
           List<Mtl> mtls = MtlReader.read(materialInputStream);
           for (Mtl mtl : mtls) {
             // TODO: can we get multiple texture files for a single material group?
-            String textureFileLocation = mtl.getMapKd().replaceAll("\\\\", "/");
-            File textureFile = new File(mtlDir, textureFileLocation);
-            if (textureFile.exists()) {
-              mtlAndTextures.add(new MtlAndTexture(mtl, textureFile));
-            } else {
-              // TODO: properly handle materials without texture files
-              mtlAndTextures.add(new MtlAndTexture(mtl, null));
+            if(mtl.getMapKd() != null) {
+              String textureFileLocation = mtl.getMapKd().replaceAll("\\\\", "/");
+              File textureFile = new File(mtlDir, textureFileLocation);
+              if (textureFile.exists()) {
+                mtlAndTextures.add(new MtlAndTexture(mtl, textureFile));
+              } else {
+                // TODO: properly handle materials without texture files
+                mtlAndTextures.add(new MtlAndTexture(mtl, null));
+              }
             }
           }
         }
