@@ -51,6 +51,15 @@ public final class TapHelper implements OnTouchListener {
               public boolean onDown(MotionEvent e) {
                 return true;
               }
+
+              @Override
+              public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+                if (e1.getPointerCount() < 2 && e2.getPointerCount() < 2) {
+                  queuedSingleTaps.offer(e2);
+                    return true;
+                  } else
+                    return false;
+                }
             });
   }
 

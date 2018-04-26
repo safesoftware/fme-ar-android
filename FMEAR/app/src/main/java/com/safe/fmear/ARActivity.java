@@ -17,6 +17,7 @@ import android.widget.PopupMenu;
 import android.view.ScaleGestureDetector;
 import android.widget.Toast;
 
+import com.almeros.android.multitouch.RotateGestureDetector;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.ArCoreApk;
 import com.google.ar.core.Camera;
@@ -45,8 +46,6 @@ import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
 import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException;
 import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
 import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException;
-
-import com.almeros.android.multitouch.RotateGestureDetector;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -98,7 +97,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     // Two finger scale gesture detecting
     private ScaleListener mScaleListener;
     private ScaleGestureDetector mScaleDetector;
-    private float mScaleFactor = 1.0f;
+    private float mScaleFactor;
 
     // Two finger rotation gesture detecting
     private RotationListener mRotateListener;
@@ -125,11 +124,11 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
         installRequested = false;
 
-        mScaleListener = new ScaleListener(mScaleFactor);
-        mScaleDetector = new ScaleGestureDetector(this, mScaleListener);
+        mScaleListener = new ScaleListener();
+        mScaleDetector = new ScaleGestureDetector(getApplicationContext(), mScaleListener);
 
         mRotateListener = new RotationListener();
-        mRotateDetector = new RotateGestureDetector(this, mRotateListener);
+        mRotateDetector = new RotateGestureDetector(getApplicationContext(), mRotateListener);
 
         // Initialize the temp directory by removing previous content and recreate the directory
         initDirectory(tempDirectory());
@@ -426,7 +425,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Rotate model 270 degrees around the x axis, this is needed to translate
                 // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
                 // the z-axis is flat while the y-axis points up
-                Matrix.rotateM(anchorMatrix,0, FME_TO_OPENGL_ROTATION_ANGLE,1,0,0);
+                Matrix.rotateM(anchorMatrix, 0, FME_TO_OPENGL_ROTATION_ANGLE, 1, 0, 0);
 
                 // Rotate model by angle detected from two finger gesture
                 Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
