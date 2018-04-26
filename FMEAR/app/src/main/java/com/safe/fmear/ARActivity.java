@@ -144,6 +144,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     case R.id.browse_files:
                         performFileSearch();
                         return true;
+                    case R.id.reload:
+                        reload();
+                        return true;
                     default:
                         return false;
                 }
@@ -501,6 +504,18 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             }
             // END_INCLUDE (parse_open_document_response)
         }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // This function...
+    public void reload() {
+        Log.wtf(TAG, "reload()");
+
+        mScaleFactor = 1.0f;
+        mScaleListener.setmScaleFactor(1.0f);
+
+        mRotateAngle = 0.0f;
+        mRotateListener.setmRotationDegrees(0.0f);
     }
 
     // ---------------------------------------------------------------------------------------------
