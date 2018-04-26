@@ -14,8 +14,10 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.PopupMenu;
+import android.view.ScaleGestureDetector;
 import android.widget.Toast;
 
+import com.almeros.android.multitouch.RotateGestureDetector;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.ArCoreApk;
 import com.google.ar.core.Camera;
@@ -92,6 +94,16 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     private static final int READ_REQUEST_CODE = 1337;
 
+    // Two finger scale gesture detecting
+    private ScaleListener mScaleListener;
+    private ScaleGestureDetector mScaleDetector;
+    private float mScaleFactor;
+
+    // Two finger rotation gesture detecting
+    private RotationListener mRotateListener;
+    private RotateGestureDetector mRotateDetector;
+    private float mRotateAngle;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -111,6 +123,12 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         surfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
 
         installRequested = false;
+
+        mScaleListener = new ScaleListener();
+        mScaleDetector = new ScaleGestureDetector(getApplicationContext(), mScaleListener);
+
+        mRotateListener = new RotationListener();
+        mRotateDetector = new RotateGestureDetector(getApplicationContext(), mRotateListener);
 
         // Initialize the temp directory by removing previous content and recreate the directory
         initDirectory(tempDirectory());
@@ -376,7 +394,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     session.getAllTrackables(Plane.class), camera.getDisplayOrientedPose(), projmtx);
 
             // Visualize anchors created by touch.
-            float scaleFactor = 1.0f;
             for (Anchor anchor : anchors) {
                 if (anchor.getTrackingState() != TrackingState.TRACKING) {
                     continue;
@@ -409,9 +426,14 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
                 // the z-axis is flat while the y-axis points up
                 Matrix.rotateM(anchorMatrix, 0, FME_TO_OPENGL_ROTATION_ANGLE, 1, 0, 0);
-                // Update and draw the model and its shadow.
-                virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
-                virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
+
+                // Rotate model by angle detected from two finger gesture
+                Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
+
+                // Update and draw the model and its shadow while scaling the object
+                // by the scale factor detected from two finger gesture
+                virtualObject.updateModelMatrix(anchorMatrix, mScaleFactor);
+                virtualObjectShadow.updateModelMatrix(anchorMatrix, mScaleFactor);
                 virtualObject.draw(viewmtx, projmtx, colorCorrectionRgba);
                 virtualObjectShadow.draw(viewmtx, projmtx, colorCorrectionRgba);
             }
@@ -420,6 +442,19 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             // Avoid crashing the application due to unhandled exceptions.
             Log.e(TAG, "Exception on the OpenGL thread", t);
         }
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent ev) {
+        mScaleDetector.onTouchEvent(ev);
+        // Get scale factor for scaling object
+        mScaleFactor = mScaleListener.getmScaleFactor();
+
+        mRotateDetector.onTouchEvent(ev);
+        // Get angle for rotation
+        mRotateAngle = mRotateListener.getRotationDegrees();
+
+        return true;
     }
 
     /**
@@ -592,6 +627,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             }
 
             zipInputStream.close();
+            mScaleFactor = 1.0f;
         }
         catch(IOException e)
         {
