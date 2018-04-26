@@ -76,6 +76,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     private final BackgroundRenderer backgroundRenderer = new BackgroundRenderer();
     private final ObjectRenderer virtualObject = new ObjectRenderer();
+    private final int objLimit = 100;
+    private List<ObjectRenderer> rendererList = new ArrayList<>();
     private final PlaneRenderer planeRenderer = new PlaneRenderer();
     private final PointCloudRenderer pointCloudRenderer = new PointCloudRenderer();
 
@@ -104,6 +106,12 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        for(int i = 0; i<objLimit; i++) {
+            ObjectRenderer virtualObject = new ObjectRenderer();
+            rendererList.add(virtualObject);
+        }
+
         setContentView(R.layout.activity_main);
         surfaceView = findViewById(R.id.surfaceview);
         displayRotationHelper = new DisplayRotationHelper(/*context=*/ this);
@@ -276,7 +284,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             pointCloudRenderer.createOnGlThread(/*context=*/ this);
 
             // Create the shaders and the program first. We will load the obj into this object later
-            virtualObject.createProgram(this);
+            for(ObjectRenderer virtualObject: rendererList) {
+                virtualObject.createProgram(this);
+            }
 
         } catch (IOException e) {
             Log.e(TAG, "Failed to read an asset file", e);
@@ -386,6 +396,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     session.getAllTrackables(Plane.class), camera.getDisplayOrientedPose(), projmtx);
 
             // Visualize anchors created by touch.
+            List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
             for (Anchor anchor : anchors) {
                 if (anchor.getTrackingState() != TrackingState.TRACKING) {
                     continue;
@@ -397,31 +408,41 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Load the new obj files if any
                 if (datasetDrawRequested) {
                     datasetDrawRequested = false;
-                    List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
                     if (!objFiles.isEmpty()) {
-                        // TODO: We need to render all the obj files instead of just the first one
-                        File firstObjFile = objFiles.get(0);
-
                         try {
-                            virtualObject.loadObj(this, firstObjFile);
+                            for(int i=0; i<objFiles.size(); i++) {
+                               rendererList.get(i).loadObj(this, objFiles.get(i));
+                            }
                         } catch (IOException e) {
                             Log.e(TAG, "Failed to read an asset file", e);
                         }
                     }
                 }
 
-                // Rotate model 270 degrees around the x axis, this is needed to translate
-                // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
-                // the z-axis is flat while the y-axis points up
-                Matrix.rotateM(anchorMatrix, 0, FME_TO_OPENGL_ROTATION_ANGLE, 1, 0, 0);
+                //for find extents of each obj
 
-                // Rotate model by angle detected from two finger gesture
-                Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
+                //for obj extents, find cumulative extents
 
-                // Update and draw the model and its shadow while scaling the object
-                // by the scale factor detected from two finger gesture
-                virtualObject.updateModelMatrix(anchorMatrix, mScaleFactor);
-                virtualObject.draw(viewmtx, projmtx, colorCorrectionRgba);
+                //for obj, Translate to center so origin is 0,0,0
+
+                //for obj, Rotations based on cumulative extents (????)
+
+                //for obj, Translate back to where we wanted to go
+
+                for(int i=0; i<objFiles.size(); i++) {
+                    // Rotate model 270 degrees around the x axis, this is needed to translate
+                    // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
+                    // the z-axis is flat while the y-axis points up
+                    //Matrix.rotateM(anchorMatrix, 0, FME_TO_OPENGL_ROTATION_ANGLE, 1, 0, 0);
+
+                    // Rotate model by angle detected from two finger gesture
+                    Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
+
+                    // Update and draw the model and its shadow while scaling the object
+                    // by the scale factor detected from two finger gesture
+                    rendererList.get(i).updateModelMatrix(anchorMatrix, mScaleFactor);
+                    rendererList.get(i).draw(viewmtx, projmtx, colorCorrectionRgba);
+                }
             }
 
         } catch (Throwable t) {
