@@ -134,29 +134,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         initDirectory(tempDirectory());
     }
 
-    public void showPopup(View v) {
-        final View view = v;
-        PopupMenu popup = new PopupMenu(this, view);
-        popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-            @Override
-            public boolean onMenuItemClick(MenuItem item) {
-                switch (item.getItemId()) {
-                    case R.id.browse_files:
-                        performFileSearch();
-                        return true;
-                    case R.id.reload:
-                        reload();
-                        return true;
-                    default:
-                        return false;
-                }
-            }
-        });
-        MenuInflater inflater = popup.getMenuInflater();
-        inflater.inflate(R.menu.actions, popup.getMenu());
-        popup.show();
-    }
-
     @Override
     protected void onResume() {
         super.onResume();
@@ -460,29 +437,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         return true;
     }
 
-    /**
-     * Fires an intent to spin up the "file chooser" UI and select an image.
-     */
-    public void performFileSearch() {
-
-        // BEGIN_INCLUDE (use_open_document_intent)
-        // ACTION_OPEN_DOCUMENT is the intent to choose a file via the system's file browser.
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-
-        // Filter to only show results that can be "opened", such as a file (as opposed to a list
-        // of contacts or timezones)
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-
-        // To search for all documents available via installed storage providers, it would be
-        // "*/*".
-//      TODO: The following MIME type filter is not correct. It allows all files
-//      to be opened in the ARActivity, even files other than .fmear.
-        intent.setType("application/*");
-
-        startActivityForResult(intent, READ_REQUEST_CODE);
-        // END_INCLUDE (use_open_document_intent)
-    }
-
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
         Log.i(TAG, "Received an \"Activity Result\"");
@@ -507,7 +461,54 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     }
 
     // ---------------------------------------------------------------------------------------------
-    // This function...
+    // This function displays what each button from the menu does.
+    public void showPopup(View v) {
+        final View view = v;
+        PopupMenu popup = new PopupMenu(this, view);
+        popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+            @Override
+            public boolean onMenuItemClick(MenuItem item) {
+                switch (item.getItemId()) {
+                    case R.id.browse_files:
+                        performFileSearch();
+                        return true;
+                    case R.id.reload:
+                        reload();
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+        });
+        MenuInflater inflater = popup.getMenuInflater();
+        inflater.inflate(R.menu.actions, popup.getMenu());
+        popup.show();
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // This function fires an intent to spin up the "file chooser" UI and select an image.
+    public void performFileSearch() {
+
+        // BEGIN_INCLUDE (use_open_document_intent)
+        // ACTION_OPEN_DOCUMENT is the intent to choose a file via the system's file browser.
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+
+        // Filter to only show results that can be "opened", such as a file (as opposed to a list
+        // of contacts or timezones)
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+
+        // To search for all documents available via installed storage providers, it would be
+        // "*/*".
+//      TODO: The following MIME type filter is not correct. It allows all files
+//      to be opened in the ARActivity, even files other than .fmear.
+        intent.setType("application/*");
+
+        startActivityForResult(intent, READ_REQUEST_CODE);
+        // END_INCLUDE (use_open_document_intent)
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // This function resets the scale of the object, the way it's facing, and placement.
     public void reload() {
         Log.wtf(TAG, "reload()");
 
