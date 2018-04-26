@@ -21,10 +21,8 @@ import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLUtils;
 import android.opengl.Matrix;
-import de.javagl.obj.Obj;
-import de.javagl.obj.ObjData;
-import de.javagl.obj.ObjReader;
-import de.javagl.obj.ObjUtils;
+
+import com.safe.fmear.FileFinder;
 
 import java.io.File;
 import java.io.IOException;
@@ -34,6 +32,18 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import de.javagl.obj.Mtl;
+import de.javagl.obj.MtlReader;
+import de.javagl.obj.Obj;
+import de.javagl.obj.ObjData;
+import de.javagl.obj.ObjReader;
+import de.javagl.obj.ObjSplitting;
+import de.javagl.obj.ObjUtils;
 
 /** Renders an object loaded from an OBJ file in OpenGL. */
 public class ObjectRenderer {
@@ -155,169 +165,68 @@ public class ObjectRenderer {
   // This function updates the geometry information in the context.
   public void loadObj(Context context, File objFile)
           throws IOException {
-
-      // TODO: Temporarily using this boolean to decide whether we want to draw or not.
-      initialized = true;
-
-// TODO: We should follow https://github.com/javagl/ObjSamples/blob/master/src/main/java/de/javagl/obj/samples/ObjSample_13_RenderByMaterial.java
-// to render the OBJ by material. It's possible to have multiple textures in one OBJ.
-//    // Read the texture.
-//    Bitmap textureBitmap =
-//            BitmapFactory.decodeStream(context.getAssets().open(diffuseTextureAssetName));
-//
-//    GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-//    GLES20.glGenTextures(textures.length, textures, 0);
-//    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textures[0]);
-//
-//    GLES20.glTexParameteri(
-//            GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR_MIPMAP_LINEAR);
-//    GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
-//    GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, textureBitmap, 0);
-//    GLES20.glGenerateMipmap(GLES20.GL_TEXTURE_2D);
-//    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
-//
-//    textureBitmap.recycle();
-//
-//    ShaderUtil.checkGLError(TAG, "Texture loading");
-
-    // Read the obj file.
-    InputStream objInputStream = context.getContentResolver().openInputStream(Uri.fromFile(objFile));
-    Obj obj = ObjReader.read(objInputStream);
-
-    // Prepare the Obj so that its structure is suitable for
-    // rendering with OpenGL:
-    // 1. Triangulate it
-    // 2. Make sure that texture coordinates are not ambiguous
-    // 3. Make sure that normals are not ambiguous
-    // 4. Convert it to single-indexed data
-    obj = ObjUtils.convertToRenderable(obj);
-
-    // OpenGL does not use Java arrays. ByteBuffers are used instead to provide data in a format
-    // that OpenGL understands.
-
-    // Obtain the data from the OBJ, as direct buffers:
-    IntBuffer wideIndices = ObjData.getFaceVertexIndices(obj, 3);
-    FloatBuffer vertices = ObjData.getVertices(obj);
-    FloatBuffer texCoords = ObjData.getTexCoords(obj, 2);
-    FloatBuffer normals = ObjData.getNormals(obj);
-
-    // Convert int indices to shorts for GL ES 2.0 compatibility
-    ShortBuffer indices =
-            ByteBuffer.allocateDirect(2 * wideIndices.limit())
-                    .order(ByteOrder.nativeOrder())
-                    .asShortBuffer();
-    while (wideIndices.hasRemaining()) {
-      indices.put((short) wideIndices.get());
-    }
-    indices.rewind();
-
-    int[] buffers = new int[2];
-    GLES20.glGenBuffers(2, buffers, 0);
-    vertexBufferId = buffers[0];
-    indexBufferId = buffers[1];
-
-    // Load vertex buffer
-    verticesBaseAddress = 0;
-    texCoordsBaseAddress = verticesBaseAddress + 4 * vertices.limit();
-    normalsBaseAddress = texCoordsBaseAddress + 4 * texCoords.limit();
-    final int totalBytes = normalsBaseAddress + 4 * normals.limit();
-
-    GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vertexBufferId);
-    GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, totalBytes, null, GLES20.GL_STATIC_DRAW);
-
-    if (vertices.limit() > 0) {
-      GLES20.glBufferSubData(
-              GLES20.GL_ARRAY_BUFFER, verticesBaseAddress, 4 * vertices.limit(), vertices);
-    }
-
-    if (texCoords.limit() > 0) {
-      GLES20.glBufferSubData(
-              GLES20.GL_ARRAY_BUFFER, texCoordsBaseAddress, 4 * texCoords.limit(), texCoords);
-    }
-
-    if (normals.limit() > 0) {
-      GLES20.glBufferSubData(
-              GLES20.GL_ARRAY_BUFFER, normalsBaseAddress, 4 * normals.limit(), normals);
-    }
-
-    GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
-
-    // Load index buffer
-    GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, indexBufferId);
-    indexCount = indices.limit();
-    GLES20.glBufferData(
-            GLES20.GL_ELEMENT_ARRAY_BUFFER, 2 * indexCount, indices, GLES20.GL_STATIC_DRAW);
-    GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
-
-    ShaderUtil.checkGLError(TAG, "OBJ buffer load");
-
-  }
-
-  /**
-   * Creates and initializes OpenGL resources needed for rendering the model.
-   *
-   * @param context Context for loading the shader and below-named model and texture assets.
-   * @param objAssetName Name of the OBJ file containing the model geometry.
-   * @param diffuseTextureAssetName Name of the PNG file containing the diffuse texture map.
-   */
-  public void createOnGlThread(Context context, String objAssetName, String diffuseTextureAssetName)
-      throws IOException {
-
     // TODO: Temporarily using this boolean to decide whether we want to draw or not.
     initialized = true;
 
-    final int vertexShader =
-        ShaderUtil.loadGLShader(TAG, context, GLES20.GL_VERTEX_SHADER, VERTEX_SHADER_NAME);
-    final int fragmentShader =
-        ShaderUtil.loadGLShader(TAG, context, GLES20.GL_FRAGMENT_SHADER, FRAGMENT_SHADER_NAME);
-
-    program = GLES20.glCreateProgram();
-    GLES20.glAttachShader(program, vertexShader);
-    GLES20.glAttachShader(program, fragmentShader);
-    GLES20.glLinkProgram(program);
-    GLES20.glUseProgram(program);
-
-    ShaderUtil.checkGLError(TAG, "Program creation");
-
-    modelViewUniform = GLES20.glGetUniformLocation(program, "u_ModelView");
-    modelViewProjectionUniform = GLES20.glGetUniformLocation(program, "u_ModelViewProjection");
-
-    positionAttribute = GLES20.glGetAttribLocation(program, "a_Position");
-    normalAttribute = GLES20.glGetAttribLocation(program, "a_Normal");
-    texCoordAttribute = GLES20.glGetAttribLocation(program, "a_TexCoord");
-
-    textureUniform = GLES20.glGetUniformLocation(program, "u_Texture");
-
-    lightingParametersUniform = GLES20.glGetUniformLocation(program, "u_LightingParameters");
-    materialParametersUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters");
-    colorCorrectionParameterUniform =
-        GLES20.glGetUniformLocation(program, "u_ColorCorrectionParameters");
-
-    ShaderUtil.checkGLError(TAG, "Program parameters");
-
-    // Read the texture.
-    Bitmap textureBitmap =
-        BitmapFactory.decodeStream(context.getAssets().open(diffuseTextureAssetName));
-
-    GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-    GLES20.glGenTextures(textures.length, textures, 0);
-    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textures[0]);
-
-    GLES20.glTexParameteri(
-        GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR_MIPMAP_LINEAR);
-    GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
-    GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, textureBitmap, 0);
-    GLES20.glGenerateMipmap(GLES20.GL_TEXTURE_2D);
-    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
-
-    textureBitmap.recycle();
-
-    ShaderUtil.checkGLError(TAG, "Texture loading");
-
     // Read the obj file.
-    InputStream objInputStream = context.getAssets().open(objAssetName);
-    Obj obj = ObjReader.read(objInputStream);
+    try (InputStream objInputStream = context.getContentResolver().openInputStream(Uri.fromFile(objFile))) {
+      if (objInputStream == null) {
+        // nothing to load, move on
+        return;
+      }
+      Obj obj = ObjReader.read(objInputStream);
+      Map<String, MtlAndTexture> materialsByName = fetchMaterials(obj, context, objFile.getParentFile());
 
+      int numMaterialGroups = obj.getNumMaterialGroups();
+      if (numMaterialGroups > 1) {
+        Map<String, Obj> materialToObjMap = ObjSplitting.splitByMaterialGroups(obj);
+
+        for (Map.Entry<String, Obj> entry : materialToObjMap.entrySet()) {
+          String materialName = entry.getKey();
+          MtlAndTexture mtlAndTexture = materialsByName.get(materialName);
+          Mtl mtl = mtlAndTexture.getMtl();
+          File textureFile = mtlAndTexture.getTextureFile();
+
+          textures[0] = loadTexture(context, textureFile);
+          renderObj(entry.getValue(), mtl);
+        }
+      } else if (numMaterialGroups == 1) {
+        String materialName = obj.getMaterialGroup(0).getName();
+        MtlAndTexture mtlAndTexture = materialsByName.get(materialName);
+        textures[0] = loadTexture(context, mtlAndTexture.getTextureFile());
+        renderObj(obj, mtlAndTexture.getMtl());
+      } else {
+        renderObj(obj, null);
+      }
+    }
+  }
+
+  private int loadTexture(Context context, File textureFile) throws IOException {
+    final int[] textureHandle = new int[1];
+    GLES20.glGenTextures(textureHandle.length, textureHandle, 0);
+    if (textureHandle[0] == 0) {
+      throw new RuntimeException("Error generating texture handle.");
+    }
+
+    try (InputStream textureInputStream = context.getContentResolver().openInputStream(Uri.fromFile(textureFile))) {
+      BitmapFactory.Options options = new BitmapFactory.Options();
+      options.inScaled = false;
+      Bitmap textureBitmap =
+              BitmapFactory.decodeStream(textureInputStream, null, options);
+      GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+      GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureHandle[0]);
+      GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
+      GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+      GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, textureBitmap, 0);
+      GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+      textureBitmap.recycle();
+
+      ShaderUtil.checkGLError(TAG, "Texture loading");
+    }
+    return textureHandle[0];
+  }
+
+  private void renderObj(Obj obj, Mtl mtl) {
     // Prepare the Obj so that its structure is suitable for
     // rendering with OpenGL:
     // 1. Triangulate it
@@ -375,7 +284,45 @@ public class ObjectRenderer {
 
     ShaderUtil.checkGLError(TAG, "OBJ buffer load");
 
-    Matrix.setIdentityM(modelMatrix, 0);
+    setMaterialProperties(mtl);
+  }
+
+  private Map<String, MtlAndTexture> fetchMaterials(Obj obj, Context context, File objDir) throws IOException {
+    Map<String, MtlAndTexture> materialByNameMap = new HashMap<>();
+
+    List<MtlAndTexture> mtlAndTextures = new ArrayList<>();
+    List<String> mtlFileNames = obj.getMtlFileNames();
+
+    for (String mtlFileName : mtlFileNames) {
+      // TODO: tidy up this fileFinder
+      List<File> files = new FileFinder(mtlFileName).find(objDir);
+      File mtlFile = files.get(0);
+      File mtlDir = mtlFile.getParentFile();
+
+      try (InputStream materialInputStream = context.getContentResolver().openInputStream(Uri.fromFile(mtlFile))) {
+        if (materialInputStream != null) {
+          List<Mtl> mtls = MtlReader.read(materialInputStream);
+          for (Mtl mtl : mtls) {
+            // TODO: can we get multiple texture files for a single material group?
+            String textureFileLocation = mtl.getMapKd().replaceAll("\\\\", "/");
+            File textureFile = new File(mtlDir, textureFileLocation);
+            if (textureFile.exists()) {
+              mtlAndTextures.add(new MtlAndTexture(mtl, textureFile));
+            } else {
+              // TODO: properly handle materials without texture files
+              mtlAndTextures.add(new MtlAndTexture(mtl, null));
+            }
+          }
+        }
+      }
+    }
+
+    // TODO: consider different materials sharing same name (doomed anyways?)
+    for (MtlAndTexture mtlAndTexture : mtlAndTextures) {
+      String name = mtlAndTexture.getMtl().getName();
+      materialByNameMap.put(name, mtlAndTexture);
+    }
+    return materialByNameMap;
   }
 
   /**
@@ -385,6 +332,7 @@ public class ObjectRenderer {
    */
   public void setBlendMode(BlendMode blendMode) {
     this.blendMode = blendMode;
+    // TODO: remove this if not needed. this was used to blend shadows
   }
 
   /**
@@ -411,18 +359,21 @@ public class ObjectRenderer {
   /**
    * Sets the surface characteristics of the rendered model.
    *
-   * @param ambient Intensity of non-directional surface illumination.
-   * @param diffuse Diffuse (matte) surface reflectivity.
-   * @param specular Specular (shiny) surface reflectivity.
-   * @param specularPower Surface shininess. Larger values result in a smaller, sharper specular
-   *     highlight.
+   * @param material
    */
-  public void setMaterialProperties(
-      float ambient, float diffuse, float specular, float specularPower) {
-    this.ambient = ambient;
-    this.diffuse = diffuse;
-    this.specular = specular;
-    this.specularPower = specularPower;
+  public void setMaterialProperties(Mtl material) {
+    if (material == null) {
+      return;
+    }
+    // TODO: how to convert these Float Tuples into single floats ? 7
+//    this.ambient = material.getKa();
+//    this.diffuse = material.getKd();
+//    this.specular = material.getKs();
+    // this.specular = material.getNs()
+    this.ambient = 0.5f;
+    this.diffuse = 0.5f;
+    this.specular = 0.5f;
+    this.specularPower = material.getNs();
   }
 
   /**
@@ -434,7 +385,7 @@ public class ObjectRenderer {
    *     properties.
    * @see #setBlendMode(BlendMode)
    * @see #updateModelMatrix(float[], float)
-   * @see #setMaterialProperties(float, float, float, float)
+   * @see #setMaterialProperties(Mtl)
    * @see android.opengl.Matrix
    */
   public void draw(float[] cameraView, float[] cameraPerspective, float[] colorCorrectionRgba) {
@@ -536,5 +487,24 @@ public class ObjectRenderer {
     v[0] *= reciprocalLength;
     v[1] *= reciprocalLength;
     v[2] *= reciprocalLength;
+  }
+
+  private class MtlAndTexture {
+    private final Mtl mtl;
+
+    private final File textureFile;
+
+    private Mtl getMtl() {
+      return mtl;
+    }
+
+    private File getTextureFile() {
+      return textureFile;
+    }
+
+    private MtlAndTexture(Mtl mtl, File textureFile) {
+      this.mtl = mtl;
+      this.textureFile = textureFile;
+    }
   }
 }

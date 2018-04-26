@@ -6,8 +6,8 @@ import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -21,7 +21,6 @@ import com.google.ar.core.ArCoreApk;
 import com.google.ar.core.Camera;
 import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
-import com.google.ar.core.LightEstimate;
 import com.google.ar.core.Plane;
 import com.google.ar.core.Point;
 import com.google.ar.core.PointCloud;
@@ -37,7 +36,6 @@ import com.google.ar.core.examples.java.common.rendering.BackgroundRenderer;
 import com.google.ar.core.examples.java.common.rendering.ObjectRenderer;
 import com.google.ar.core.examples.java.common.rendering.PlaneRenderer;
 import com.google.ar.core.examples.java.common.rendering.PointCloudRenderer;
-import com.google.ar.core.examples.java.helloar.HelloArActivity;
 import com.google.ar.core.exceptions.CameraNotAvailableException;
 import com.google.ar.core.exceptions.UnavailableApkTooOldException;
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
@@ -61,7 +59,7 @@ import javax.microedition.khronos.opengles.GL10;
 // =================================================================================================
 // ARActivity
 public class ARActivity extends AppCompatActivity implements GLSurfaceView.Renderer {
-    private static final String TAG = HelloArActivity.class.getSimpleName();
+    private static final String TAG = ARActivity.class.getSimpleName();
     private static final float FME_TO_OPENGL_ROTATION_ANGLE = (float) 270;
 
     // Rendering. The Renderers are created here, and initialized when the GL surface is created.
@@ -76,7 +74,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     private final BackgroundRenderer backgroundRenderer = new BackgroundRenderer();
     private final ObjectRenderer virtualObject = new ObjectRenderer();
-    private final ObjectRenderer virtualObjectShadow = new ObjectRenderer();
     private final PlaneRenderer planeRenderer = new PlaneRenderer();
     private final PointCloudRenderer pointCloudRenderer = new PointCloudRenderer();
 
@@ -263,11 +260,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             // Create the shaders and the program first. We will load the obj into this object later
             virtualObject.createProgram(this);
 
-            virtualObjectShadow.createOnGlThread(
-                    /*context=*/ this, "models/andy_shadow.obj", "models/andy_shadow.png");
-            virtualObjectShadow.setBlendMode(ObjectRenderer.BlendMode.Shadow);
-            virtualObjectShadow.setMaterialProperties(1.0f, 0.0f, 0.0f, 1.0f);
-
         } catch (IOException e) {
             Log.e(TAG, "Failed to read an asset file", e);
         }
@@ -394,11 +386,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                         File firstObjFile = objFiles.get(0);
 
                         try {
-
                             virtualObject.loadObj(this, firstObjFile);
-                            //                virtualObject.createOnGlThread(/*context=*/ this, "models/andy.obj", "models/andy.png");
-                            //                virtualObject.setMaterialProperties(0.0f, 2.0f, 0.5f, 6.0f);
-
                         } catch (IOException e) {
                             Log.e(TAG, "Failed to read an asset file", e);
                         }
@@ -411,9 +399,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 Matrix.rotateM(anchorMatrix, 0, FME_TO_OPENGL_ROTATION_ANGLE, 1, 0, 0);
                 // Update and draw the model and its shadow.
                 virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
-                virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
                 virtualObject.draw(viewmtx, projmtx, colorCorrectionRgba);
-                virtualObjectShadow.draw(viewmtx, projmtx, colorCorrectionRgba);
             }
 
         } catch (Throwable t) {
