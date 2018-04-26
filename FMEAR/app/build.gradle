@@ -28,5 +28,4 @@ dependencies {
     implementation 'de.javagl:obj:0.3.0'
     implementation 'com.google.ar:core:1.1.0'
     implementation 'com.android.support:design:27.1.1'
-    implementation 'com.github.Almeros:android-gesture-detectors:master-SNAPSHOT'
 }
