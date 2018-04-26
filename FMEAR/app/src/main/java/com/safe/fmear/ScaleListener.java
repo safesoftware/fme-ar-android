@@ -14,4 +14,8 @@ public class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureList
     public float getmScaleFactor() {
         return this.mScaleFactor;
     }
+
+    public void setmScaleFactor(final float scaleFactor) {
+        mScaleFactor = scaleFactor;
+    }
 }
