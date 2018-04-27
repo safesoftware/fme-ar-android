@@ -465,7 +465,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Rotate model by angle detected from two finger gesture
                 Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
 
-                Matrix.translateM(anchorMatrix, 0, -offsetX, -offsetY, -offsetZ);
+                Matrix.translateM(anchorMatrix, 0, -offsetX*mScaleFactor, -offsetY*mScaleFactor, -offsetZ*mScaleFactor);
 
                 for(int i=0; i<objFiles.size(); i++) {
                     // Update and draw the model and its shadow while scaling the object
