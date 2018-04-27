@@ -21,6 +21,7 @@ import com.almeros.android.multitouch.RotateGestureDetector;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.ArCoreApk;
 import com.google.ar.core.Camera;
+import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
 import com.google.ar.core.LightEstimate;
@@ -59,6 +60,8 @@ import java.util.zip.ZipInputStream;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
+
+import static com.google.ar.core.Config.UpdateMode.LATEST_CAMERA_IMAGE;
 
 // =================================================================================================
 // ARActivity
@@ -302,10 +305,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             // compared to frame rate.
 
             MotionEvent tap = tapHelper.poll();
-            if (anchors.size() == 0) {
-                // TODO: Add functionality to detect first stable horizontal/vertical plane and
-                // place an anchor.
-            }
             if (tap != null && camera.getTrackingState() == TrackingState.TRACKING) {
                 // Clears previous anchors; new anchor with each tap.
                 anchors.clear();
@@ -509,9 +508,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     // ---------------------------------------------------------------------------------------------
     // This function resets the scale of the object, the way it's facing, and placement.
+    // mScaleFactor and mRotateAngle have to be set before, because otherwise it only resets
+    // once you drag the dataset.
     public void reload() {
-        Log.wtf(TAG, "reload()");
-
         mScaleFactor = 1.0f;
         mScaleListener.setmScaleFactor(1.0f);
 
