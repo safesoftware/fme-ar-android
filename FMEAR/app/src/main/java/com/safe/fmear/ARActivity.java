@@ -76,6 +76,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     private final BackgroundRenderer backgroundRenderer = new BackgroundRenderer();
     private final ObjectRenderer virtualObject = new ObjectRenderer();
+    private final int objLimit = 100;
+    private List<ObjectRenderer> rendererList = new ArrayList<>();
     private final PlaneRenderer planeRenderer = new PlaneRenderer();
     private final PointCloudRenderer pointCloudRenderer = new PointCloudRenderer();
 
@@ -104,6 +106,12 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        for(int i = 0; i<objLimit; i++) {
+            ObjectRenderer virtualObject = new ObjectRenderer();
+            rendererList.add(virtualObject);
+        }
+
         setContentView(R.layout.activity_main);
         surfaceView = findViewById(R.id.surfaceview);
         displayRotationHelper = new DisplayRotationHelper(/*context=*/ this);
@@ -276,7 +284,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             pointCloudRenderer.createOnGlThread(/*context=*/ this);
 
             // Create the shaders and the program first. We will load the obj into this object later
-            virtualObject.createProgram(this);
+            for(ObjectRenderer virtualObject: rendererList) {
+                virtualObject.createProgram(this);
+            }
 
         } catch (IOException e) {
             Log.e(TAG, "Failed to read an asset file", e);
@@ -386,6 +396,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     session.getAllTrackables(Plane.class), camera.getDisplayOrientedPose(), projmtx);
 
             // Visualize anchors created by touch.
+            List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
             for (Anchor anchor : anchors) {
                 if (anchor.getTrackingState() != TrackingState.TRACKING) {
                     continue;
@@ -397,19 +408,53 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Load the new obj files if any
                 if (datasetDrawRequested) {
                     datasetDrawRequested = false;
-                    List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
                     if (!objFiles.isEmpty()) {
-                        // TODO: We need to render all the obj files instead of just the first one
-                        File firstObjFile = objFiles.get(0);
-
                         try {
-                            virtualObject.loadObj(this, firstObjFile);
+                            for(int i=0; i<objFiles.size(); i++) {
+                               rendererList.get(i).loadObj(this, objFiles.get(i));
+                            }
                         } catch (IOException e) {
                             Log.e(TAG, "Failed to read an asset file", e);
                         }
                     }
                 }
 
+                float maxX = 0f;
+                float minX = 0f;
+                float maxY = 0f;
+                float minY = 0f;
+                float maxZ = 0f;
+                float minZ = 0f;
+                for(int i = 0; i < objFiles.size(); i++) {
+                    float[] verticesArray = rendererList.get(i).getFloatArray();
+                    for(int vertexIndex = 0; vertexIndex < verticesArray.length; vertexIndex += 3){
+                        if(i == 0 && vertexIndex == 0) {
+                            maxX = verticesArray[vertexIndex];
+                            minX = verticesArray[vertexIndex];
+
+                            maxY = verticesArray[vertexIndex + 1];
+                            minY = verticesArray[vertexIndex + 1];
+
+                            maxZ = verticesArray[vertexIndex + 2];
+                            minZ = verticesArray[vertexIndex + 2];
+                        } else {
+                            maxX = Math.max(maxX,verticesArray[vertexIndex]);
+                            minX = Math.min(minX,verticesArray[vertexIndex]);
+
+                            maxY = Math.max(maxY,verticesArray[vertexIndex + 1]);
+                            minY = Math.min(minY,verticesArray[vertexIndex + 1]);
+
+                            maxZ = Math.max(maxZ,verticesArray[vertexIndex + 2]);
+                            minZ = Math.min(minZ,verticesArray[vertexIndex + 2]);
+                        }
+                    }
+                }
+
+                float offsetX = (maxX + minX)/2;
+                float offsetY = (maxY + minY)/2;
+                float offsetZ = (maxZ + minZ)/2;
+
+                //Matrix.translateM(anchorMatrix, 0, offsetX, offsetY, offsetZ);
                 // Rotate model 270 degrees around the x axis, this is needed to translate
                 // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
                 // the z-axis is flat while the y-axis points up
@@ -418,10 +463,14 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Rotate model by angle detected from two finger gesture
                 Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
 
-                // Update and draw the model and its shadow while scaling the object
-                // by the scale factor detected from two finger gesture
-                virtualObject.updateModelMatrix(anchorMatrix, mScaleFactor);
-                virtualObject.draw(viewmtx, projmtx, colorCorrectionRgba);
+                Matrix.translateM(anchorMatrix, 0, -offsetX, -offsetY, -offsetZ);
+
+                for(int i=0; i<objFiles.size(); i++) {
+                    // Update and draw the model and its shadow while scaling the object
+                    // by the scale factor detected from two finger gesture
+                    rendererList.get(i).updateModelMatrix(anchorMatrix, 1f);
+                    rendererList.get(i).draw(viewmtx, projmtx, colorCorrectionRgba);
+                }
             }
 
         } catch (Throwable t) {
