@@ -209,8 +209,12 @@ public class ObjectRenderer {
       } else if (numMaterialGroups == 1) {
         String materialName = obj.getMaterialGroup(0).getName();
         MtlAndTexture mtlAndTexture = materialsByName.get(materialName);
-        textures[0] = loadTexture(context, mtlAndTexture.getTextureFile());
-        renderObj(obj, mtlAndTexture.getMtl());
+        Mtl mtl = null;
+        if(mtlAndTexture != null) {
+          mtl = mtlAndTexture.getMtl();
+          textures[0] = loadTexture(context, mtlAndTexture.getTextureFile());
+        }
+        renderObj(obj, mtl);
       } else {
         renderObj(obj, null);
       }
