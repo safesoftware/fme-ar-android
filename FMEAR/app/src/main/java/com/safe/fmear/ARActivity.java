@@ -26,6 +26,7 @@ import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.core.Point;
 import com.google.ar.core.PointCloud;
+import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
 import com.google.ar.core.TrackingState;
@@ -320,6 +321,43 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             Frame frame = session.update();
             Camera camera = frame.getCamera();
 
+            List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
+            float maxX = 0f;
+            float minX = 0f;
+            float maxY = 0f;
+            float minY = 0f;
+            float maxZ = 0f;
+            float minZ = 0f;
+            for(int i = 0; i < objFiles.size(); i++) {
+                float[] verticesArray = rendererList.get(i).getFloatArray();
+                for(int vertexIndex = 0; vertexIndex < verticesArray.length; vertexIndex += 3){
+                    if(i == 0 && vertexIndex == 0) {
+                        maxX = verticesArray[vertexIndex];
+                        minX = verticesArray[vertexIndex];
+
+                        maxY = verticesArray[vertexIndex + 1];
+                        minY = verticesArray[vertexIndex + 1];
+
+                        maxZ = verticesArray[vertexIndex + 2];
+                        minZ = verticesArray[vertexIndex + 2];
+                    } else {
+                        maxX = Math.max(maxX,verticesArray[vertexIndex]);
+                        minX = Math.min(minX,verticesArray[vertexIndex]);
+
+                        maxY = Math.max(maxY,verticesArray[vertexIndex + 1]);
+                        minY = Math.min(minY,verticesArray[vertexIndex + 1]);
+
+                        maxZ = Math.max(maxZ,verticesArray[vertexIndex + 2]);
+                        minZ = Math.min(minZ,verticesArray[vertexIndex + 2]);
+                    }
+                }
+            }
+
+            float offsetX = (maxX + minX)/2;
+            float offsetY = (maxY + minY)/2;
+            float offsetZ = (maxZ + minZ)/2;
+
+
             // Handle taps. Handling only one tap per frame, as taps are usually low frequency
             // compared to frame rate.
 
@@ -343,6 +381,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                         // Adding an Anchor tells ARCore that it should track this position in
                         // space. This anchor is created on the Plane to place the 3D model
                         // in the correct position relative both to the world and to the plane.
+
                         anchors.add(hit.createAnchor());
                         break;
                     }
@@ -396,7 +435,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     session.getAllTrackables(Plane.class), camera.getDisplayOrientedPose(), projmtx);
 
             // Visualize anchors created by touch.
-            List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
             for (Anchor anchor : anchors) {
                 if (anchor.getTrackingState() != TrackingState.TRACKING) {
                     continue;
@@ -419,42 +457,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     }
                 }
 
-                float maxX = 0f;
-                float minX = 0f;
-                float maxY = 0f;
-                float minY = 0f;
-                float maxZ = 0f;
-                float minZ = 0f;
-                for(int i = 0; i < objFiles.size(); i++) {
-                    float[] verticesArray = rendererList.get(i).getFloatArray();
-                    for(int vertexIndex = 0; vertexIndex < verticesArray.length; vertexIndex += 3){
-                        if(i == 0 && vertexIndex == 0) {
-                            maxX = verticesArray[vertexIndex];
-                            minX = verticesArray[vertexIndex];
-
-                            maxY = verticesArray[vertexIndex + 1];
-                            minY = verticesArray[vertexIndex + 1];
-
-                            maxZ = verticesArray[vertexIndex + 2];
-                            minZ = verticesArray[vertexIndex + 2];
-                        } else {
-                            maxX = Math.max(maxX,verticesArray[vertexIndex]);
-                            minX = Math.min(minX,verticesArray[vertexIndex]);
-
-                            maxY = Math.max(maxY,verticesArray[vertexIndex + 1]);
-                            minY = Math.min(minY,verticesArray[vertexIndex + 1]);
-
-                            maxZ = Math.max(maxZ,verticesArray[vertexIndex + 2]);
-                            minZ = Math.min(minZ,verticesArray[vertexIndex + 2]);
-                        }
-                    }
-                }
-
-                float offsetX = (maxX + minX)/2;
-                float offsetY = (maxY + minY)/2;
-                float offsetZ = (maxZ + minZ)/2;
-
-                //Matrix.translateM(anchorMatrix, 0, offsetX, offsetY, offsetZ);
                 // Rotate model 270 degrees around the x axis, this is needed to translate
                 // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
                 // the z-axis is flat while the y-axis points up
