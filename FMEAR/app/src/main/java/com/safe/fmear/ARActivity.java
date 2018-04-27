@@ -21,7 +21,6 @@ import com.almeros.android.multitouch.RotateGestureDetector;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.ArCoreApk;
 import com.google.ar.core.Camera;
-import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
 import com.google.ar.core.LightEstimate;
@@ -60,8 +59,6 @@ import java.util.zip.ZipInputStream;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
-
-import static com.google.ar.core.Config.UpdateMode.LATEST_CAMERA_IMAGE;
 
 // =================================================================================================
 // ARActivity
