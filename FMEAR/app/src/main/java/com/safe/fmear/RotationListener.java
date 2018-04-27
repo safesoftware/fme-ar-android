@@ -14,4 +14,8 @@ public class RotationListener extends RotateGestureDetector.SimpleOnRotateGestur
     public float getRotationDegrees() {
         return this.mRotationDegrees;
     }
+
+    public void setmRotationDegrees(final float rotateAngle) {
+        mRotationDegrees = rotateAngle;
+    }
 }
