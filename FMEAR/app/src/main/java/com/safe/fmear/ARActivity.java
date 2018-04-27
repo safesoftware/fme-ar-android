@@ -26,6 +26,7 @@ import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.core.Point;
 import com.google.ar.core.PointCloud;
+import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
 import com.google.ar.core.TrackingState;
@@ -76,6 +77,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     private final BackgroundRenderer backgroundRenderer = new BackgroundRenderer();
     private final ObjectRenderer virtualObject = new ObjectRenderer();
+    private final int objLimit = 100;
+    private List<ObjectRenderer> rendererList = new ArrayList<>();
     private final PlaneRenderer planeRenderer = new PlaneRenderer();
     private final PointCloudRenderer pointCloudRenderer = new PointCloudRenderer();
 
@@ -104,6 +107,12 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        for(int i = 0; i<objLimit; i++) {
+            ObjectRenderer virtualObject = new ObjectRenderer();
+            rendererList.add(virtualObject);
+        }
+
         setContentView(R.layout.activity_main);
         surfaceView = findViewById(R.id.surfaceview);
         displayRotationHelper = new DisplayRotationHelper(/*context=*/ this);
@@ -256,7 +265,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             pointCloudRenderer.createOnGlThread(/*context=*/ this);
 
             // Create the shaders and the program first. We will load the obj into this object later
-            virtualObject.createProgram(this);
+            for(ObjectRenderer virtualObject: rendererList) {
+                virtualObject.createProgram(this);
+            }
 
         } catch (IOException e) {
             Log.e(TAG, "Failed to read an asset file", e);
@@ -290,6 +301,43 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             Frame frame = session.update();
             Camera camera = frame.getCamera();
 
+            List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
+            float maxX = 0f;
+            float minX = 0f;
+            float maxY = 0f;
+            float minY = 0f;
+            float maxZ = 0f;
+            float minZ = 0f;
+            for(int i = 0; i < objFiles.size(); i++) {
+                float[] verticesArray = rendererList.get(i).getFloatArray();
+                for(int vertexIndex = 0; vertexIndex < verticesArray.length; vertexIndex += 3){
+                    if(i == 0 && vertexIndex == 0) {
+                        maxX = verticesArray[vertexIndex];
+                        minX = verticesArray[vertexIndex];
+
+                        maxY = verticesArray[vertexIndex + 1];
+                        minY = verticesArray[vertexIndex + 1];
+
+                        maxZ = verticesArray[vertexIndex + 2];
+                        minZ = verticesArray[vertexIndex + 2];
+                    } else {
+                        maxX = Math.max(maxX,verticesArray[vertexIndex]);
+                        minX = Math.min(minX,verticesArray[vertexIndex]);
+
+                        maxY = Math.max(maxY,verticesArray[vertexIndex + 1]);
+                        minY = Math.min(minY,verticesArray[vertexIndex + 1]);
+
+                        maxZ = Math.max(maxZ,verticesArray[vertexIndex + 2]);
+                        minZ = Math.min(minZ,verticesArray[vertexIndex + 2]);
+                    }
+                }
+            }
+
+            float offsetX = (maxX + minX)/2;
+            float offsetY = (maxY + minY)/2;
+            float offsetZ = (maxZ + minZ)/2;
+
+
             // Handle taps. Handling only one tap per frame, as taps are usually low frequency
             // compared to frame rate.
 
@@ -309,6 +357,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                         // Adding an Anchor tells ARCore that it should track this position in
                         // space. This anchor is created on the Plane to place the 3D model
                         // in the correct position relative both to the world and to the plane.
+
                         anchors.add(hit.createAnchor());
                         break;
                     }
@@ -373,13 +422,11 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Load the new obj files if any
                 if (datasetDrawRequested) {
                     datasetDrawRequested = false;
-                    List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
                     if (!objFiles.isEmpty()) {
-                        // TODO: We need to render all the obj files instead of just the first one
-                        File firstObjFile = objFiles.get(0);
-
                         try {
-                            virtualObject.loadObj(this, firstObjFile);
+                            for(int i=0; i<objFiles.size(); i++) {
+                               rendererList.get(i).loadObj(this, objFiles.get(i));
+                            }
                         } catch (IOException e) {
                             Log.e(TAG, "Failed to read an asset file", e);
                         }
@@ -394,10 +441,14 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Rotate model by angle detected from two finger gesture
                 Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
 
-                // Update and draw the model and its shadow while scaling the object
-                // by the scale factor detected from two finger gesture
-                virtualObject.updateModelMatrix(anchorMatrix, mScaleFactor);
-                virtualObject.draw(viewmtx, projmtx, colorCorrectionRgba);
+                Matrix.translateM(anchorMatrix, 0, -offsetX*mScaleFactor, -offsetY*mScaleFactor, -offsetZ*mScaleFactor);
+
+                for(int i=0; i<objFiles.size(); i++) {
+                    // Update and draw the model and its shadow while scaling the object
+                    // by the scale factor detected from two finger gesture
+                    rendererList.get(i).updateModelMatrix(anchorMatrix, mScaleFactor);
+                    rendererList.get(i).draw(viewmtx, projmtx, colorCorrectionRgba);
+                }
             }
 
         } catch (Throwable t) {
