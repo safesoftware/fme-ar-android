@@ -118,6 +118,8 @@ public class ObjectRenderer {
 
   private boolean initialized = false;
 
+  private Obj obj;
+
   public ObjectRenderer() {
     Matrix.setIdentityM(modelMatrix, 0);
   }
@@ -162,6 +164,17 @@ public class ObjectRenderer {
 
   }
 
+  public float[] getFloatArray() {
+    float[] retArray = new float[0];
+    if(obj != null) {
+      FloatBuffer vertices = ObjData.getVertices(obj);
+      retArray = new float[vertices.remaining()];
+      vertices.get(retArray);
+    }
+
+    return retArray;
+  }
+
   // This function updates the geometry information in the context.
   public void loadObj(Context context, File objFile)
           throws IOException {
@@ -174,7 +187,7 @@ public class ObjectRenderer {
         // nothing to load, move on
         return;
       }
-      Obj obj = ObjReader.read(objInputStream);
+      obj = ObjReader.read(objInputStream);
       Map<String, MtlAndTexture> materialsByName = fetchMaterials(obj, context, objFile.getParentFile());
 
       int numMaterialGroups = obj.getNumMaterialGroups();
@@ -229,23 +242,23 @@ public class ObjectRenderer {
     return textureHandle[0];
   }
 
-  private void renderObj(Obj obj, Mtl mtl) {
+  private void renderObj(Obj currObj, Mtl mtl) {
     // Prepare the Obj so that its structure is suitable for
     // rendering with OpenGL:
     // 1. Triangulate it
     // 2. Make sure that texture coordinates are not ambiguous
     // 3. Make sure that normals are not ambiguous
     // 4. Convert it to single-indexed data
-    obj = ObjUtils.convertToRenderable(obj);
+    currObj = ObjUtils.convertToRenderable(currObj);
 
     // OpenGL does not use Java arrays. ByteBuffers are used instead to provide data in a format
     // that OpenGL understands.
 
     // Obtain the data from the OBJ, as direct buffers:
-    IntBuffer wideIndices = ObjData.getFaceVertexIndices(obj, 3);
-    FloatBuffer vertices = ObjData.getVertices(obj);
-    FloatBuffer texCoords = ObjData.getTexCoords(obj, 2);
-    FloatBuffer normals = ObjData.getNormals(obj);
+    IntBuffer wideIndices = ObjData.getFaceVertexIndices(currObj, 3);
+    FloatBuffer vertices = ObjData.getVertices(currObj);
+    FloatBuffer texCoords = ObjData.getTexCoords(currObj, 2);
+    FloatBuffer normals = ObjData.getNormals(currObj);
 
     // Convert int indices to shorts for GL ES 2.0 compatibility
     ShortBuffer indices =
@@ -290,11 +303,11 @@ public class ObjectRenderer {
     setMaterialProperties(mtl);
   }
 
-  private Map<String, MtlAndTexture> fetchMaterials(Obj obj, Context context, File objDir) throws IOException {
+  private Map<String, MtlAndTexture> fetchMaterials(Obj currObj, Context context, File objDir) throws IOException {
     Map<String, MtlAndTexture> materialByNameMap = new HashMap<>();
 
     List<MtlAndTexture> mtlAndTextures = new ArrayList<>();
-    List<String> mtlFileNames = obj.getMtlFileNames();
+    List<String> mtlFileNames = currObj.getMtlFileNames();
 
     for (String mtlFileName : mtlFileNames) {
       // TODO: tidy up this fileFinder
@@ -486,6 +499,7 @@ public class ObjectRenderer {
 
     ShaderUtil.checkGLError(TAG, "After draw");
   }
+
 
   private static void normalizeVec3(float[] v) {
     float reciprocalLength = 1.0f / (float) Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);

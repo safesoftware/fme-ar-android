@@ -419,28 +419,56 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     }
                 }
 
-                //for find extents of each obj
+                float maxX = 0f;
+                float minX = 0f;
+                float maxY = 0f;
+                float minY = 0f;
+                float maxZ = 0f;
+                float minZ = 0f;
+                for(int i = 0; i < objFiles.size(); i++) {
+                    float[] verticesArray = rendererList.get(i).getFloatArray();
+                    for(int vertexIndex = 0; vertexIndex < verticesArray.length; vertexIndex += 3){
+                        if(i == 0 && vertexIndex == 0) {
+                            maxX = verticesArray[vertexIndex];
+                            minX = verticesArray[vertexIndex];
 
-                //for obj extents, find cumulative extents
+                            maxY = verticesArray[vertexIndex + 1];
+                            minY = verticesArray[vertexIndex + 1];
 
-                //for obj, Translate to center so origin is 0,0,0
+                            maxZ = verticesArray[vertexIndex + 2];
+                            minZ = verticesArray[vertexIndex + 2];
+                        } else {
+                            maxX = Math.max(maxX,verticesArray[vertexIndex]);
+                            minX = Math.min(minX,verticesArray[vertexIndex]);
 
-                //for obj, Rotations based on cumulative extents (????)
+                            maxY = Math.max(maxY,verticesArray[vertexIndex + 1]);
+                            minY = Math.min(minY,verticesArray[vertexIndex + 1]);
 
-                //for obj, Translate back to where we wanted to go
+                            maxZ = Math.max(maxZ,verticesArray[vertexIndex + 2]);
+                            minZ = Math.min(minZ,verticesArray[vertexIndex + 2]);
+                        }
+                    }
+                }
+
+                float offsetX = (maxX + minX)/2;
+                float offsetY = (maxY + minY)/2;
+                float offsetZ = (maxZ + minZ)/2;
+
+                //Matrix.translateM(anchorMatrix, 0, offsetX, offsetY, offsetZ);
+                // Rotate model 270 degrees around the x axis, this is needed to translate
+                // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
+                // the z-axis is flat while the y-axis points up
+                Matrix.rotateM(anchorMatrix, 0, FME_TO_OPENGL_ROTATION_ANGLE, 1, 0, 0);
+
+                // Rotate model by angle detected from two finger gesture
+                Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
+
+                Matrix.translateM(anchorMatrix, 0, -offsetX, -offsetY, -offsetZ);
 
                 for(int i=0; i<objFiles.size(); i++) {
-                    // Rotate model 270 degrees around the x axis, this is needed to translate
-                    // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
-                    // the z-axis is flat while the y-axis points up
-                    //Matrix.rotateM(anchorMatrix, 0, FME_TO_OPENGL_ROTATION_ANGLE, 1, 0, 0);
-
-                    // Rotate model by angle detected from two finger gesture
-                    Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
-
                     // Update and draw the model and its shadow while scaling the object
                     // by the scale factor detected from two finger gesture
-                    rendererList.get(i).updateModelMatrix(anchorMatrix, mScaleFactor);
+                    rendererList.get(i).updateModelMatrix(anchorMatrix, 1f);
                     rendererList.get(i).draw(viewmtx, projmtx, colorCorrectionRgba);
                 }
             }
