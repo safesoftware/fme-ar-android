@@ -470,7 +470,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 for(int i=0; i<objFiles.size(); i++) {
                     // Update and draw the model and its shadow while scaling the object
                     // by the scale factor detected from two finger gesture
-                    rendererList.get(i).updateModelMatrix(anchorMatrix, 1f);
+                    rendererList.get(i).updateModelMatrix(anchorMatrix, mScaleFactor);
                     rendererList.get(i).draw(viewmtx, projmtx, colorCorrectionRgba);
                 }
             }
