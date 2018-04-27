@@ -3,4 +3,8 @@
     <item
         android:id="@+id/browse_files"
         android:title="@string/browse_files"></item>
+
+    <item
+        android:id="@+id/reload"
+        android:title="@string/reload"></item>
 </menu>
