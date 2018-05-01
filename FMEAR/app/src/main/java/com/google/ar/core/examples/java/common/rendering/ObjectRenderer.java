@@ -37,13 +37,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import de.javagl.obj.FloatTuple;
+import de.javagl.obj.FloatTuples;
 import de.javagl.obj.Mtl;
 import de.javagl.obj.MtlReader;
 import de.javagl.obj.Obj;
 import de.javagl.obj.ObjData;
+import de.javagl.obj.ObjFace;
+import de.javagl.obj.ObjFaces;
 import de.javagl.obj.ObjReader;
 import de.javagl.obj.ObjSplitting;
 import de.javagl.obj.ObjUtils;
+import de.javagl.obj.Objs;
 
 /** Renders an object loaded from an OBJ file in OpenGL. */
 public class ObjectRenderer {
@@ -190,6 +195,14 @@ public class ObjectRenderer {
       obj = ObjReader.read(objInputStream);
       Map<String, MtlAndTexture> materialsByName = fetchMaterials(obj, context, objFile.getParentFile());
 
+      // Prepare the Obj so that its structure is suitable for
+      // rendering with OpenGL:
+      // 1. Triangulate it
+      // 2. Make sure that texture coordinates are not ambiguous
+      // 3. Make sure that normals are not ambiguous
+      // 4. Convert it to single-indexed data
+      obj = ObjUtils.convertToRenderable(obj);
+
       int numMaterialGroups = obj.getNumMaterialGroups();
       if (numMaterialGroups > 1) {
         Map<String, Obj> materialToObjMap = ObjSplitting.splitByMaterialGroups(obj);
@@ -247,13 +260,9 @@ public class ObjectRenderer {
   }
 
   private void renderObj(Obj currObj, Mtl mtl) {
-    // Prepare the Obj so that its structure is suitable for
-    // rendering with OpenGL:
-    // 1. Triangulate it
-    // 2. Make sure that texture coordinates are not ambiguous
-    // 3. Make sure that normals are not ambiguous
-    // 4. Convert it to single-indexed data
-    currObj = ObjUtils.convertToRenderable(currObj);
+    if (currObj.getNumNormals() <= 0) {
+      currObj = createNewObjWithNormals(currObj);
+    }
 
     // OpenGL does not use Java arrays. ByteBuffers are used instead to provide data in a format
     // that OpenGL understands.
@@ -305,6 +314,128 @@ public class ObjectRenderer {
     ShaderUtil.checkGLError(TAG, "OBJ buffer load");
 
     setMaterialProperties(mtl);
+  }
+
+  // FIXME: there are LOTS of unnecessary float array inits. optimize!
+  private Obj createNewObjWithNormals(Obj obj) {
+    // Make sure we deal with triangles only
+    obj = ObjUtils.triangulate(obj);
+
+    ArrayList<float[]> normalArrayList = new ArrayList<>(obj.getNumVertices());
+    Map<FloatTuple, Integer> vertexToNormalIndexMap = new HashMap<>(obj.getNumVertices());
+    Map<ObjFace, ArrayList<Integer>> faceToNormalIndexMap = new HashMap<>(obj.getNumFaces());
+
+    for (int i = 0; i < obj.getNumFaces(); i++) {
+      ObjFace face = obj.getFace(i);
+      // Need at least 3 vertices to calculate face normal
+      FloatTuple[] faceVertices = new FloatTuple[3];
+      for (int j = 0; j < face.getNumVertices() && j < 3; j++) {
+        FloatTuple vertex = obj.getVertex(face.getVertexIndex(j));
+        faceVertices[j] = vertex;
+      }
+      float[] vertexNormal = calculateVertexNormal(faceVertices);
+
+      faceToNormalIndexMap.put(face, new ArrayList<Integer>(3));
+      for (FloatTuple faceVertex : faceVertices) {
+        if (vertexToNormalIndexMap.containsKey(faceVertex)) {
+          Integer index = vertexToNormalIndexMap.get(faceVertex);
+          addFloatArray(normalArrayList.get(index), vertexNormal);
+        } else {
+          normalArrayList.add(vertexNormal);
+          vertexToNormalIndexMap.put(faceVertex, normalArrayList.size() - 1);
+        }
+        Integer normalIndex = vertexToNormalIndexMap.get(faceVertex);
+        faceToNormalIndexMap.get(face).add(normalIndex);
+      }
+    }
+
+    // Normalize vertex normals after all faces have been evaluated
+    for (float[] vertexNormal : normalArrayList) {
+      normalize(vertexNormal);
+    }
+
+    // Clone to output obj
+    Obj output = Objs.create();
+    output.setMtlFileNames(obj.getMtlFileNames());
+    // copy vertices
+    for (int i = 0; i < obj.getNumVertices(); i++) {
+      output.addVertex(obj.getVertex(i));
+    }
+    // copy texture coordinates
+    for (int i = 0; i < obj.getNumTexCoords(); i++) {
+      output.addTexCoord(obj.getTexCoord(i));
+    }
+    // inject our normals
+    for (float[] normal : normalArrayList) {
+      output.addNormal(toFloatTuple(normal));
+    }
+    // copy and inject normals to face
+    for (ObjFace face : faceToNormalIndexMap.keySet()) {
+      int numVertices = face.getNumVertices();
+      // get vertices
+      int[] v = new int[numVertices]; // triangles only!
+      for (int i = 0; i < numVertices; i++) {
+        v[i] = face.getVertexIndex(i);
+      }
+
+      // get texture coords
+      int[] vt = new int[numVertices];
+      if (face.containsTexCoordIndices()) {
+        for (int i = 0; i < numVertices; i++) {
+          vt[i] = face.getTexCoordIndex(i);
+        }
+      }
+
+      // get normal coords
+      int[] vn = new int[numVertices];
+      ArrayList<Integer> normalIndeces = faceToNormalIndexMap.get(face);
+      for (int i = 0; i < normalIndeces.size(); i++) {
+        vn[i] = normalIndeces.get(i);
+      }
+      output.addFace(ObjFaces.create(v, vt, vn));
+    }
+    return output;
+  }
+
+  private static FloatTuple toFloatTuple(float[] vector3) {
+    return FloatTuples.create(vector3[0], vector3[1], vector3[2]);
+  }
+
+  private static void normalize(float[] array) {
+    float magnitude = (float) Math.sqrt(array[0] * array[0] + array[1] * array[1] + array[2] * array[2]);
+    array[0] = array[0] / magnitude;
+    array[1] = array[1] / magnitude;
+    array[2] = array[2] / magnitude;
+  }
+
+  private void addFloatArray(float[] originalArray, float[] arrayToAdd) {
+    // TODO: null check?
+    if (originalArray.length != arrayToAdd.length) {
+      throw new IllegalArgumentException("arrays need to be of same length");
+    }
+    for (int i = 0; i < originalArray.length; i++) {
+      originalArray[i] = originalArray[i] + arrayToAdd[i];
+    }
+  }
+
+  private static float[] calculateVertexNormal(FloatTuple[] faceVertices) {
+    if (faceVertices.length != 3) {
+      throw new IllegalArgumentException("Need 3 face vertices to calculate normals");
+    }
+    float[] vector1 = createVector(faceVertices[1], faceVertices[0]);
+    float[] vector2 = createVector(faceVertices[2], faceVertices[0]);
+    return cross(vector1, vector2);
+  }
+
+  private static float[] cross(float[] p1, float[] p2) {
+    float x = p1[1] * p2[2] - p2[1] * p1[2];
+    float y = p1[2] * p2[0] - p2[2] * p1[0];
+    float z = p1[0] * p2[1] - p2[0] * p1[1];
+    return new float[]{x, y, z};
+  }
+
+  private static float[] createVector(FloatTuple head, FloatTuple tail) {
+    return new float[]{head.getX() - tail.getX(), head.getY() - tail.getY(), head.getZ() - tail.getZ()};
   }
 
   private Map<String, MtlAndTexture> fetchMaterials(Obj currObj, Context context, File objDir) throws IOException {
