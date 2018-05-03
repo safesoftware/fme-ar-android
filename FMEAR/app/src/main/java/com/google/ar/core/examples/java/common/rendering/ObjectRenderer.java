@@ -66,6 +66,95 @@ public class ObjectRenderer {
     Grid
   }
 
+  public class Bounds {
+
+    public boolean isValid() {
+      return initialized;
+    }
+
+    public void reset() {
+      initialized = false;
+      set(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    public void set(float newMinX, float newMinY, float newMinZ, float newMaxX, float newMaxY, float newMaxZ) {
+      minX = newMinX;
+      minY = newMinY;
+      minZ = newMinZ;
+      maxX = newMaxX;
+      maxY = newMaxY;
+      maxZ = newMaxZ;
+      initialized = true;
+    }
+
+    public void expandBy(Bounds otherBounds) {
+      if (!otherBounds.isValid()) {
+        return;
+      }
+
+      if (initialized) {
+        minX = Math.min(minX, otherBounds.getMinX());
+        minY = Math.min(minY, otherBounds.getMinY());
+        minZ = Math.min(minZ, otherBounds.getMinZ());
+        maxX = Math.max(maxX, otherBounds.getMaxX());
+        maxY = Math.max(maxY, otherBounds.getMaxY());
+        maxZ = Math.max(maxZ, otherBounds.getMaxZ());
+      } else {
+        minX = otherBounds.getMinX();
+        minY = otherBounds.getMinY();
+        minZ = otherBounds.getMinZ();
+        maxX = otherBounds.getMaxX();
+        maxY = otherBounds.getMaxY();
+        maxZ = otherBounds.getMaxZ();
+        initialized = true;
+      }
+    }
+
+    public float getMinX() { return minX; };
+    public float getMinY() { return minY; };
+    public float getMinZ() { return minZ; };
+    public float getMaxX() { return maxX; };
+    public float getMaxY() { return maxY; };
+    public float getMaxZ() { return maxZ; };
+
+    boolean initialized = false;
+    public float minX = 0.0f;
+    public float minY = 0.0f;
+    public float minZ = 0.0f;
+    public float maxX = 0.0f;
+    public float maxY = 0.0f;
+    public float maxZ = 0.0f;
+  };
+
+  public class ObjProperty {
+
+    class MaterialProperty
+    {
+      public String materialName;
+
+      public Bounds bounds = new Bounds();
+
+      public boolean hasTexture = false;
+      public int textureId = 0;
+
+      public int vertexBufferId = 0;
+      public int indexBufferId = 0;
+
+      public int verticesBaseAddress = 0;
+      public int texCoordsBaseAddress = 0;
+      public int normalsBaseAddress = 0;
+
+      public int numVertices = 0;
+      public int numNormals = 0;
+      public int numTexCoords = 0;
+      public int indexCount = 0;
+    };
+
+    public String objFilename;
+    public Bounds bounds = new Bounds();
+    public ArrayList<MaterialProperty> materialProperties;
+  };
+
   // Shader names.
   private static final String VERTEX_SHADER_NAME = "shaders/object.vert";
   private static final String FRAGMENT_SHADER_NAME = "shaders/object.frag";
@@ -76,16 +165,10 @@ public class ObjectRenderer {
   private static final float[] LIGHT_DIRECTION = new float[] {0.250f, 0.866f, 0.433f, 0.0f};
   private final float[] viewLightDirection = new float[4];
 
-  // Object vertex buffer variables.
-  private int vertexBufferId;
-  private int verticesBaseAddress;
-  private int texCoordsBaseAddress;
-  private int normalsBaseAddress;
-  private int indexBufferId;
-  private int indexCount;
-
   private int program;
-  private final int[] textures = new int[1];
+
+  private List<ObjProperty> objProperties;
+  private Bounds datasetBounds = new Bounds();
 
   // Shader location: model view projection matrix.
   private int modelViewUniform;
@@ -123,7 +206,6 @@ public class ObjectRenderer {
 
   private boolean initialized = false;
 
-  private Obj obj;
 
   public ObjectRenderer() {
     Matrix.setIdentityM(modelMatrix, 0);
@@ -169,73 +251,188 @@ public class ObjectRenderer {
 
   }
 
-  public float[] getFloatArray() {
-    float[] retArray = new float[0];
-    if(obj != null) {
-      FloatBuffer vertices = ObjData.getVertices(obj);
-      retArray = new float[vertices.remaining()];
-      vertices.get(retArray);
+  public Bounds calculateBounds(FloatBuffer vertices) {
+    Bounds bounds = new Bounds();
+    int dimensions = 3;
+    int limit = vertices.limit();
+    int index = 0;
+    if (limit >= /*xyz*/ dimensions) {
+      bounds.minX = vertices.get(index++);
+      bounds.minY = vertices.get(index++);
+      bounds.minZ = vertices.get(index++);
+      bounds.maxX = bounds.minX;
+      bounds.maxY = bounds.minY;
+      bounds.maxZ = bounds.minZ;
+      bounds.initialized = true;
+      while ((index + dimensions) <= limit) {
+        bounds.minX = Math.min(bounds.minX, vertices.get(index));
+        bounds.minY = Math.min(bounds.minY, vertices.get(index + 1));
+        bounds.minZ = Math.min(bounds.minZ, vertices.get(index + 2));
+        bounds.maxX = Math.max(bounds.maxX, vertices.get(index));
+        bounds.maxY = Math.max(bounds.maxY, vertices.get(index + 1));
+        bounds.maxZ = Math.max(bounds.maxZ, vertices.get(index + 2));
+        index += dimensions;
+      }
     }
-
-    return retArray;
+    return bounds;
   }
 
-  // This function updates the geometry information in the context.
-  public void loadObj(Context context, File objFile)
+  public void loadObjFiles(Context context, List<File> files)
           throws IOException {
+
+    if (files.isEmpty()) {
+      return;
+    }
+
     // TODO: Temporarily using this boolean to decide whether we want to draw or not.
     initialized = true;
 
-    // Read the obj file.
-    try (InputStream objInputStream = context.getContentResolver().openInputStream(Uri.fromFile(objFile))) {
-      if (objInputStream == null) {
-        // nothing to load, move on
-        return;
-      }
-      obj = ObjReader.read(objInputStream);
-      Map<String, MtlAndTexture> materialsByName = fetchMaterials(obj, context, objFile.getParentFile());
+    objProperties = new ArrayList<>(files.size());
+    datasetBounds.reset();
 
-      // Prepare the Obj so that its structure is suitable for
-      // rendering with OpenGL:
-      // 1. Triangulate it
-      // 2. Make sure that texture coordinates are not ambiguous
-      // 3. Make sure that normals are not ambiguous
-      // 4. Convert it to single-indexed data
-      obj = ObjUtils.convertToRenderable(obj);
+    // Read each obj file
+    for (File objFile : files)
+    {
+      // Read the obj file.
+      try (InputStream objInputStream = context.getContentResolver().openInputStream(Uri.fromFile(objFile))) {
+        if (objInputStream == null) {
+          // nothing to load, move on
+          return;
+        }
 
-      int numMaterialGroups = obj.getNumMaterialGroups();
-      if (numMaterialGroups > 1) {
-        Map<String, Obj> materialToObjMap = ObjSplitting.splitByMaterialGroups(obj);
+        Obj objObject = ObjReader.read(objInputStream);
+        Map<String, MtlAndTexture> materialsByName = fetchMaterials(objObject, context, objFile.getParentFile());
+
+        // Prepare the Obj so that its structure is suitable for
+        // rendering with OpenGL:
+        // 1. Triangulate it
+        // 2. Make sure that texture coordinates are not ambiguous
+        // 3. Make sure that normals are not ambiguous
+        // 4. Convert it to single-indexed data
+        objObject = ObjUtils.convertToRenderable(objObject);
+
+//        int numMaterialGroups = obj.getNumMaterialGroups();
+
+        // For every obj file, store the properties for later use
+        ObjProperty objProperty = new ObjProperty();
+        objProperty.objFilename = objFile.toString();
+        objProperties.add(objProperty);
+
+        Map<String, Obj> materialToObjMap = ObjSplitting.splitByMaterialGroups(objObject);
+        if (materialToObjMap.isEmpty()) {
+          // If there is no material, we just simply add the original obj with an empty material
+          // name
+          materialToObjMap.put("", objObject);
+        }
+
+        int numMaterialGroups = materialToObjMap.size();
+        objProperty.materialProperties = new ArrayList<>(numMaterialGroups);
 
         for (Map.Entry<String, Obj> entry : materialToObjMap.entrySet()) {
+
+          // Get the material name from the key and the obj object from the value
           String materialName = entry.getKey();
+          Obj currObj = entry.getValue();
+
+//          if (currObj.getNumNormals() <= 0) {
+//            currObj = createNewObjWithNormals(currObj);
+//          }
+
+          // Create a material property record in the obj property
+          ObjProperty.MaterialProperty materialProperty = objProperty.new MaterialProperty();
+          objProperty.materialProperties.add(materialProperty);
+          materialProperty.materialName = materialName;
+
+          // If we can read a material and or a texture, we store it in the property.
           MtlAndTexture mtlAndTexture = materialsByName.get(materialName);
           Mtl mtl = null;
-          if(mtlAndTexture != null) {
+          if (mtlAndTexture != null) {
             mtl = mtlAndTexture.getMtl();
             File textureFile = mtlAndTexture.getTextureFile();
-
-            textures[0] = loadTexture(context, textureFile);
+            if (textureFile.exists()) {
+              materialProperty.textureId = loadTexture(context, textureFile);
+              materialProperty.hasTexture = true;
+            }
           }
-          renderObj(entry.getValue(), mtl);
+
+          // OpenGL does not use Java arrays. ByteBuffers are used instead to provide data in a format
+          // that OpenGL understands.
+
+          // Obtain the data from the OBJ, as direct buffers:
+          IntBuffer wideIndices = ObjData.getFaceVertexIndices(currObj, 3);
+          FloatBuffer vertices = ObjData.getVertices(currObj);
+          FloatBuffer texCoords = ObjData.getTexCoords(currObj, 2);
+
+          FloatBuffer normals = ObjData.getNormals(currObj);
+
+          // Calculate the material property bounds. Also expand the obj property bounds.
+          materialProperty.bounds = calculateBounds(vertices);
+          objProperty.bounds.expandBy(materialProperty.bounds);
+
+          // Convert int indices to shorts for GL ES 2.0 compatibility
+          ShortBuffer indices = ByteBuffer.allocateDirect(2 * wideIndices.limit())
+            .order(ByteOrder.nativeOrder())
+            .asShortBuffer();
+          while (wideIndices.hasRemaining()) {
+            indices.put((short) wideIndices.get());
+          }
+          indices.rewind();
+
+          int[] buffers = new int[2];
+          GLES20.glGenBuffers(2, buffers, 0);
+          materialProperty.vertexBufferId = buffers[0];
+          materialProperty.indexBufferId = buffers[1];
+
+          // Load vertex buffer
+          materialProperty.numVertices = vertices.limit() / 3;
+          materialProperty.numTexCoords = texCoords.limit() / 3;
+          materialProperty.numNormals = normals.limit() / 3;
+
+          materialProperty.verticesBaseAddress = 0;
+          materialProperty.texCoordsBaseAddress = materialProperty.verticesBaseAddress + 4 * vertices.limit();
+          materialProperty.normalsBaseAddress = materialProperty.texCoordsBaseAddress + 4 * texCoords.limit();
+          final int totalBytes = materialProperty.normalsBaseAddress + 4 * normals.limit();
+
+          GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, materialProperty.vertexBufferId);
+          GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, totalBytes, null, GLES20.GL_STATIC_DRAW);
+          if (vertices.limit() > 0) {
+            GLES20.glBufferSubData(
+                    GLES20.GL_ARRAY_BUFFER, materialProperty.verticesBaseAddress, 4 * vertices.limit(), vertices);
+          }
+          if (texCoords.limit() > 0) {
+            GLES20.glBufferSubData(
+                    GLES20.GL_ARRAY_BUFFER, materialProperty.texCoordsBaseAddress, 4 * texCoords.limit(), texCoords);
+          }
+          if (normals.limit() > 0) {
+            GLES20.glBufferSubData(
+                    GLES20.GL_ARRAY_BUFFER, materialProperty.normalsBaseAddress, 4 * normals.limit(), normals);
+          }
+          GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+
+          // Load index buffer
+          materialProperty.indexCount = indices.limit();
+          if (materialProperty.indexCount > 0) {
+            GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, materialProperty.indexBufferId);
+            GLES20.glBufferData(
+                    GLES20.GL_ELEMENT_ARRAY_BUFFER, 2 * materialProperty.indexCount, indices, GLES20.GL_STATIC_DRAW);
+            GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
+          }
+
+          ShaderUtil.checkGLError(TAG, "OBJ buffer load");
+
+          setMaterialProperties(mtl);
         }
-      } else if (numMaterialGroups == 1) {
-        String materialName = obj.getMaterialGroup(0).getName();
-        MtlAndTexture mtlAndTexture = materialsByName.get(materialName);
-        Mtl mtl = null;
-        if(mtlAndTexture != null) {
-          mtl = mtlAndTexture.getMtl();
-          textures[0] = loadTexture(context, mtlAndTexture.getTextureFile());
-        }
-        renderObj(obj, mtl);
-      } else {
-        renderObj(obj, null);
+
+        datasetBounds.expandBy(objProperty.bounds);
       }
     }
   }
 
+  public Bounds getDatasetBounds() { return datasetBounds; };
+
+
   private int loadTexture(Context context, File textureFile) throws IOException {
-    final int[] textureHandle = new int[1];
+    final int[] textureHandle = new int[]{0};
     GLES20.glGenTextures(textureHandle.length, textureHandle, 0);
     if (textureHandle[0] == 0) {
       throw new RuntimeException("Error generating texture handle.");
@@ -259,67 +456,11 @@ public class ObjectRenderer {
     return textureHandle[0];
   }
 
-  private void renderObj(Obj currObj, Mtl mtl) {
-    if (currObj.getNumNormals() <= 0) {
-      currObj = createNewObjWithNormals(currObj);
-    }
-
-    // OpenGL does not use Java arrays. ByteBuffers are used instead to provide data in a format
-    // that OpenGL understands.
-
-    // Obtain the data from the OBJ, as direct buffers:
-    IntBuffer wideIndices = ObjData.getFaceVertexIndices(currObj, 3);
-    FloatBuffer vertices = ObjData.getVertices(currObj);
-    FloatBuffer texCoords = ObjData.getTexCoords(currObj, 2);
-    FloatBuffer normals = ObjData.getNormals(currObj);
-
-    // Convert int indices to shorts for GL ES 2.0 compatibility
-    ShortBuffer indices =
-        ByteBuffer.allocateDirect(2 * wideIndices.limit())
-            .order(ByteOrder.nativeOrder())
-            .asShortBuffer();
-    while (wideIndices.hasRemaining()) {
-      indices.put((short) wideIndices.get());
-    }
-    indices.rewind();
-
-    int[] buffers = new int[2];
-    GLES20.glGenBuffers(2, buffers, 0);
-    vertexBufferId = buffers[0];
-    indexBufferId = buffers[1];
-
-    // Load vertex buffer
-    verticesBaseAddress = 0;
-    texCoordsBaseAddress = verticesBaseAddress + 4 * vertices.limit();
-    normalsBaseAddress = texCoordsBaseAddress + 4 * texCoords.limit();
-    final int totalBytes = normalsBaseAddress + 4 * normals.limit();
-
-    GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vertexBufferId);
-    GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, totalBytes, null, GLES20.GL_STATIC_DRAW);
-    GLES20.glBufferSubData(
-        GLES20.GL_ARRAY_BUFFER, verticesBaseAddress, 4 * vertices.limit(), vertices);
-    GLES20.glBufferSubData(
-        GLES20.GL_ARRAY_BUFFER, texCoordsBaseAddress, 4 * texCoords.limit(), texCoords);
-    GLES20.glBufferSubData(
-        GLES20.GL_ARRAY_BUFFER, normalsBaseAddress, 4 * normals.limit(), normals);
-    GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
-
-    // Load index buffer
-    GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, indexBufferId);
-    indexCount = indices.limit();
-    GLES20.glBufferData(
-        GLES20.GL_ELEMENT_ARRAY_BUFFER, 2 * indexCount, indices, GLES20.GL_STATIC_DRAW);
-    GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
-
-    ShaderUtil.checkGLError(TAG, "OBJ buffer load");
-
-    setMaterialProperties(mtl);
-  }
 
   // FIXME: there are LOTS of unnecessary float array inits. optimize!
   private Obj createNewObjWithNormals(Obj obj) {
     // Make sure we deal with triangles only
-    obj = ObjUtils.triangulate(obj);
+    //obj = ObjUtils.triangulate(obj);
 
     ArrayList<float[]> normalArrayList = new ArrayList<>(obj.getNumVertices());
     Map<FloatTuple, Integer> vertexToNormalIndexMap = new HashMap<>(obj.getNumVertices());
@@ -576,61 +717,82 @@ public class ObjectRenderer {
     // Set the object material properties.
     GLES20.glUniform4f(materialParametersUniform, ambient, diffuse, specular, specularPower);
 
-    // Attach the object texture.
-    GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textures[0]);
-    GLES20.glUniform1i(textureUniform, 0);
+    for (ObjProperty objProperty : objProperties) {
+      for (ObjProperty.MaterialProperty materialProperty : objProperty.materialProperties) {
 
-    // Set the vertex attributes.
-    GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vertexBufferId);
+        if (materialProperty.hasTexture) {
+          // Attach the object texture.
+          GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+          GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, materialProperty.textureId);
+          GLES20.glUniform1i(textureUniform, 0);
+        }
 
-    GLES20.glVertexAttribPointer(
-        positionAttribute, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, 0, verticesBaseAddress);
-    GLES20.glVertexAttribPointer(normalAttribute, 3, GLES20.GL_FLOAT, false, 0, normalsBaseAddress);
-    GLES20.glVertexAttribPointer(
-        texCoordAttribute, 2, GLES20.GL_FLOAT, false, 0, texCoordsBaseAddress);
+        // Set the vertex attributes.
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, materialProperty.vertexBufferId);
+        if (materialProperty.numVertices > 0) {
+          GLES20.glVertexAttribPointer(
+                  positionAttribute, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, 0, materialProperty.verticesBaseAddress);
+        }
+        if (materialProperty.numNormals > 0) {
+          GLES20.glVertexAttribPointer(normalAttribute, 3, GLES20.GL_FLOAT, false, 0, materialProperty.normalsBaseAddress);
+        }
+        if (materialProperty.numTexCoords > 0) {
+          GLES20.glVertexAttribPointer(
+                  texCoordAttribute, 2, GLES20.GL_FLOAT, false, 0, materialProperty.texCoordsBaseAddress);
+        }
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
 
-    GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+        // Set the ModelViewProjection matrix in the shader.
+        GLES20.glUniformMatrix4fv(modelViewUniform, 1, false, modelViewMatrix, 0);
+        GLES20.glUniformMatrix4fv(modelViewProjectionUniform, 1, false, modelViewProjectionMatrix, 0);
 
-    // Set the ModelViewProjection matrix in the shader.
-    GLES20.glUniformMatrix4fv(modelViewUniform, 1, false, modelViewMatrix, 0);
-    GLES20.glUniformMatrix4fv(modelViewProjectionUniform, 1, false, modelViewProjectionMatrix, 0);
+        // Enable vertex arrays
+        if (materialProperty.numVertices > 0) {
+          GLES20.glEnableVertexAttribArray(positionAttribute);
+        }
+        if (materialProperty.numNormals > 0) {
+          GLES20.glEnableVertexAttribArray(normalAttribute);
+        }
+        if (materialProperty.numTexCoords > 0) {
+          GLES20.glEnableVertexAttribArray(texCoordAttribute);
+        }
 
-    // Enable vertex arrays
-    GLES20.glEnableVertexAttribArray(positionAttribute);
-    GLES20.glEnableVertexAttribArray(normalAttribute);
-    GLES20.glEnableVertexAttribArray(texCoordAttribute);
+        if (blendMode != null) {
+          GLES20.glDepthMask(false);
+          GLES20.glEnable(GLES20.GL_BLEND);
+          switch (blendMode) {
+            case Shadow:
+              // Multiplicative blending function for Shadow.
+              GLES20.glBlendFunc(GLES20.GL_ZERO, GLES20.GL_ONE_MINUS_SRC_ALPHA);
+              break;
+            case Grid:
+              // Grid, additive blending function.
+              GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
+              break;
+          }
+        }
 
-    if (blendMode != null) {
-      GLES20.glDepthMask(false);
-      GLES20.glEnable(GLES20.GL_BLEND);
-      switch (blendMode) {
-        case Shadow:
-          // Multiplicative blending function for Shadow.
-          GLES20.glBlendFunc(GLES20.GL_ZERO, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-          break;
-        case Grid:
-          // Grid, additive blending function.
-          GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-          break;
+        if (materialProperty.indexCount > 0) {
+          GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, materialProperty.indexBufferId);
+          GLES20.glDrawElements(GLES20.GL_TRIANGLES, materialProperty.indexCount, GLES20.GL_UNSIGNED_SHORT, 0);
+          GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
+        }
+
+        if (blendMode != null) {
+          GLES20.glDisable(GLES20.GL_BLEND);
+          GLES20.glDepthMask(true);
+        }
+
+        // Disable vertex arrays
+        GLES20.glDisableVertexAttribArray(positionAttribute);
+        GLES20.glDisableVertexAttribArray(normalAttribute);
+        GLES20.glDisableVertexAttribArray(texCoordAttribute);
+
+        if (materialProperty.hasTexture) {
+          GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+        }
       }
     }
-
-    GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, indexBufferId);
-    GLES20.glDrawElements(GLES20.GL_TRIANGLES, indexCount, GLES20.GL_UNSIGNED_SHORT, 0);
-    GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
-
-    if (blendMode != null) {
-      GLES20.glDisable(GLES20.GL_BLEND);
-      GLES20.glDepthMask(true);
-    }
-
-    // Disable vertex arrays
-    GLES20.glDisableVertexAttribArray(positionAttribute);
-    GLES20.glDisableVertexAttribArray(normalAttribute);
-    GLES20.glDisableVertexAttribArray(texCoordAttribute);
-
-    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
 
     ShaderUtil.checkGLError(TAG, "After draw");
   }

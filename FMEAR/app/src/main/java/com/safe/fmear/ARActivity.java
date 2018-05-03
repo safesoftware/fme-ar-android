@@ -77,8 +77,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     private final BackgroundRenderer backgroundRenderer = new BackgroundRenderer();
     private final ObjectRenderer virtualObject = new ObjectRenderer();
-    private final int objLimit = 100;
-    private List<ObjectRenderer> rendererList = new ArrayList<>();
+    private final ObjectRenderer objectRenderer = new ObjectRenderer();
     private final PlaneRenderer planeRenderer = new PlaneRenderer();
     private final PointCloudRenderer pointCloudRenderer = new PointCloudRenderer();
 
@@ -107,11 +106,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        for(int i = 0; i<objLimit; i++) {
-            ObjectRenderer virtualObject = new ObjectRenderer();
-            rendererList.add(virtualObject);
-        }
 
         setContentView(R.layout.activity_main);
         surfaceView = findViewById(R.id.surfaceview);
@@ -264,10 +258,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             planeRenderer.createOnGlThread(/*context=*/ this, "models/trigrid.png");
             pointCloudRenderer.createOnGlThread(/*context=*/ this);
 
-            // Create the shaders and the program first. We will load the obj into this object later
-            for(ObjectRenderer virtualObject: rendererList) {
-                virtualObject.createProgram(this);
-            }
+//            objectRenderer.setBlendMode(ObjectRenderer.BlendMode.Grid);
+            objectRenderer.createProgram(this);
 
         } catch (IOException e) {
             Log.e(TAG, "Failed to read an asset file", e);
@@ -300,43 +292,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             // camera framerate.
             Frame frame = session.update();
             Camera camera = frame.getCamera();
-
-            List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
-            float maxX = 0f;
-            float minX = 0f;
-            float maxY = 0f;
-            float minY = 0f;
-            float maxZ = 0f;
-            float minZ = 0f;
-            for(int i = 0; i < objFiles.size(); i++) {
-                float[] verticesArray = rendererList.get(i).getFloatArray();
-                for(int vertexIndex = 0; vertexIndex < verticesArray.length; vertexIndex += 3){
-                    if(i == 0 && vertexIndex == 0) {
-                        maxX = verticesArray[vertexIndex];
-                        minX = verticesArray[vertexIndex];
-
-                        maxY = verticesArray[vertexIndex + 1];
-                        minY = verticesArray[vertexIndex + 1];
-
-                        maxZ = verticesArray[vertexIndex + 2];
-                        minZ = verticesArray[vertexIndex + 2];
-                    } else {
-                        maxX = Math.max(maxX,verticesArray[vertexIndex]);
-                        minX = Math.min(minX,verticesArray[vertexIndex]);
-
-                        maxY = Math.max(maxY,verticesArray[vertexIndex + 1]);
-                        minY = Math.min(minY,verticesArray[vertexIndex + 1]);
-
-                        maxZ = Math.max(maxZ,verticesArray[vertexIndex + 2]);
-                        minZ = Math.min(minZ,verticesArray[vertexIndex + 2]);
-                    }
-                }
-            }
-
-            float offsetX = (maxX + minX)/2;
-            float offsetY = (maxY + minY)/2;
-            float offsetZ = (maxZ + minZ)/2;
-
 
             // Handle taps. Handling only one tap per frame, as taps are usually low frequency
             // compared to frame rate.
@@ -422,15 +377,27 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Load the new obj files if any
                 if (datasetDrawRequested) {
                     datasetDrawRequested = false;
-                    if (!objFiles.isEmpty()) {
-                        try {
-                            for(int i=0; i<objFiles.size(); i++) {
-                               rendererList.get(i).loadObj(this, objFiles.get(i));
-                            }
-                        } catch (IOException e) {
+                    try {
+                        List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
+                        //objFiles = objFiles.subList(2, 3);
+                        objectRenderer.loadObjFiles(this, objFiles);
+                    } catch (IOException e) {
                             Log.e(TAG, "Failed to read an asset file", e);
-                        }
                     }
+                }
+
+                float offsetX = 0.0f;
+                float offsetY = 0.0f;
+                float offsetZ = 0.0f;
+                ObjectRenderer.Bounds datasetBounds = objectRenderer.getDatasetBounds();
+                if (datasetBounds.isValid()) {
+                    // We want to offset the dataset so that it's center at 0, 0,...
+                    offsetX = -(datasetBounds.getMaxX() + datasetBounds.getMinX()) / 2.0f;
+                    offsetY = -(datasetBounds.getMaxY() + datasetBounds.getMinY()) / 2.0f;
+
+                    // but we want to set the dataset to touch the detected horizontal plane (and
+                    // not having the  plane cut through the middle of the dataset)
+                    offsetZ = -datasetBounds.getMinZ()/2.0f;
                 }
 
                 // Rotate model 270 degrees around the x axis, this is needed to translate
@@ -441,14 +408,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Rotate model by angle detected from two finger gesture
                 Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
 
-                Matrix.translateM(anchorMatrix, 0, -offsetX*mScaleFactor, -offsetY*mScaleFactor, -offsetZ*mScaleFactor);
+                Matrix.translateM(anchorMatrix, 0, offsetX*mScaleFactor, offsetY*mScaleFactor, offsetZ*mScaleFactor);
 
-                for(int i=0; i<objFiles.size(); i++) {
-                    // Update and draw the model and its shadow while scaling the object
-                    // by the scale factor detected from two finger gesture
-                    rendererList.get(i).updateModelMatrix(anchorMatrix, mScaleFactor);
-                    rendererList.get(i).draw(viewmtx, projmtx, colorCorrectionRgba);
-                }
+                objectRenderer.updateModelMatrix(anchorMatrix, mScaleFactor);
+                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba);
             }
 
         } catch (Throwable t) {
