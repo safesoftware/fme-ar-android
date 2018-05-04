@@ -334,9 +334,9 @@ public class ObjectRenderer {
           String materialName = entry.getKey();
           Obj currObj = entry.getValue();
 
-//          if (currObj.getNumNormals() <= 0) {
-//            currObj = createNewObjWithNormals(currObj);
-//          }
+          if (currObj.getNumNormals() <= 0) {
+            currObj = createNewObjWithNormals(currObj);
+          }
 
           // Create a material property record in the obj property
           ObjProperty.MaterialProperty materialProperty = objProperty.new MaterialProperty();

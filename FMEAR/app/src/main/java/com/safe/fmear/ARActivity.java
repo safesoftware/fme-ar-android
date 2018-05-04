@@ -405,12 +405,23 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // the z-axis is flat while the y-axis points up
                 Matrix.rotateM(anchorMatrix, 0, FME_TO_OPENGL_ROTATION_ANGLE, 1, 0, 0);
 
+                float maxXDimension = Math.max(Math.abs(datasetBounds.getMinX()), Math.abs(datasetBounds.getMaxX()));
+                float maxYDimension = Math.max(Math.abs(datasetBounds.getMinY()), Math.abs(datasetBounds.getMaxY()));
+                float maxZDimension = Math.max(Math.abs(datasetBounds.getMinZ()), Math.abs(datasetBounds.getMaxZ()));
+
+                float maxDimension = Math.max(Math.max(maxXDimension, maxYDimension), maxZDimension);
+
+                float scale = 1.0f;
+                if (maxDimension > 0.5f) {
+                    scale = 0.5f/maxDimension;
+                }
+
                 // Rotate model by angle detected from two finger gesture
                 Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
 
-                Matrix.translateM(anchorMatrix, 0, offsetX*mScaleFactor, offsetY*mScaleFactor, offsetZ*mScaleFactor);
+                Matrix.translateM(anchorMatrix, 0, offsetX*scale*mScaleFactor, offsetY*scale*mScaleFactor, offsetZ*scale*mScaleFactor);
 
-                objectRenderer.updateModelMatrix(anchorMatrix, mScaleFactor);
+                objectRenderer.updateModelMatrix(anchorMatrix, scale*mScaleFactor);
                 objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba);
             }
 
@@ -546,6 +557,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 }
             }
         }
+        anchors.clear();
 
         return result;
     }
