@@ -1,20 +1,23 @@
 package com.safe.fmear;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
 import android.os.Bundle;
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.widget.PopupMenu;
-import android.view.ScaleGestureDetector;
 import android.widget.Toast;
 
 import com.almeros.android.multitouch.RotateGestureDetector;
@@ -26,7 +29,6 @@ import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.core.Point;
 import com.google.ar.core.PointCloud;
-import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
 import com.google.ar.core.TrackingState;
@@ -48,6 +50,7 @@ import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationExceptio
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -62,6 +65,7 @@ import javax.microedition.khronos.opengles.GL10;
 // =================================================================================================
 // ARActivity
 public class ARActivity extends AppCompatActivity implements GLSurfaceView.Renderer {
+    private static final int EXTERNAL_STORAGE_PERMISSION_CODE = 123;
     private static final String TAG = ARActivity.class.getSimpleName();
     private static final float FME_TO_OPENGL_ROTATION_ANGLE = (float) 270;
 
@@ -230,6 +234,13 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        if (requestCode == EXTERNAL_STORAGE_PERMISSION_CODE) {
+            if (results.length == 1 && results[0] == PackageManager.PERMISSION_GRANTED) {
+
+            } else {
+                Toast.makeText(this, "Storage read access is needed to load files", Toast.LENGTH_LONG).show();
+            }
+        }
         if (!CameraPermissionHelper.hasCameraPermission(this)) {
             Toast.makeText(this, "Camera permission is needed to run this application", Toast.LENGTH_LONG)
                     .show();
@@ -598,9 +609,21 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     // ---------------------------------------------------------------------------------------------
     // This function unzip the content from the contentPath to the destinationFolder. This
     // function creates all the directories necessary for the unzipped files.
-    private void unzipContent(Uri contentPath, File destinationFolder) throws IOException {
-        try (InputStream inputStream = getContentResolver().openInputStream(contentPath))
-        {
+    private void unzipContent(Uri inputUri, File destinationFolder) throws IOException {
+        InputStream inputStream;
+        String uriScheme = inputUri.getScheme();
+        if ("content".equalsIgnoreCase(uriScheme)) {
+            inputStream = getContentResolver().openInputStream(inputUri);
+        } else if ("file".equalsIgnoreCase(uriScheme)) {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                requestExternalStoragePermission();
+                return;
+            }
+            inputStream = new FileInputStream(new File(inputUri.getPath()));
+        } else {
+            throw new IOException("expected Uri with scheme 'content' or 'file', instead: " + uriScheme);
+        }
+        try {
             try (ZipInputStream zipInputStream = new ZipInputStream(new BufferedInputStream(inputStream))) {
                 // Create a buffer to read the zip file content
                 byte[] buffer = new byte[1024];
@@ -642,6 +665,17 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 }
             }
             mScaleFactor = 1.0f;
+        } finally {
+            if (inputStream != null) {
+                inputStream.close();
+            }
         }
+    }
+
+    private void requestExternalStoragePermission() {
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.READ_EXTERNAL_STORAGE)) {
+            messageSnackbarHelper.showMessage(this, "Storage access required");
+        }
+        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, EXTERNAL_STORAGE_PERMISSION_CODE);
     }
 }
