@@ -520,7 +520,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     // unzip the data, assuming it's a .fmear file, into the temp directory named "fmear" in the
     // default cache directory.
     private boolean extractDatasetFromIntent(Intent resultData) {
-        boolean result = false;
         Intent intent;
         if (resultData != null) {
             intent = resultData;
@@ -537,17 +536,26 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 initDirectory(tempDir);
 
                 // Unzip the content to the temporary directory
-                result = unzipContent(uri, tempDir);
+                try {
+                    unzipContent(uri, tempDir);
+                } catch (IOException e) {
+                    // TODO: display error - unzip failed
+                    e.printStackTrace();
+                    return false;
+                }
 
                 // Find all the .obj files
                 List<File> objFiles = new FileFinder(".obj").find(tempDir);
+                if (objFiles.size() == 0){
+                    // TODO: display error - no .obj found
+                    return false;
+                }
                 for (File file : objFiles) {
                     Log.d("FME AR", "OBJ File: " + file.toString());
                 }
             }
         }
-
-        return result;
+        return true;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -590,63 +598,50 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     // ---------------------------------------------------------------------------------------------
     // This function unzip the content from the contentPath to the destinationFolder. This
     // function creates all the directories necessary for the unzipped files.
-    private boolean unzipContent(Uri contentPath, File destinationFolder)
-    {
-        try
+    private void unzipContent(Uri contentPath, File destinationFolder) throws IOException {
+        try (InputStream inputStream = getContentResolver().openInputStream(contentPath))
         {
-            InputStream inputStream = getContentResolver().openInputStream(contentPath);
-            ZipInputStream zipInputStream = new ZipInputStream(new BufferedInputStream(inputStream));
+            try (ZipInputStream zipInputStream = new ZipInputStream(new BufferedInputStream(inputStream))) {
+                // Create a buffer to read the zip file content
+                byte[] buffer = new byte[1024];
+                int numBytes;
 
-            // Create a buffer to read the zip file content
-            byte[] buffer = new byte[1024];
-            int numBytes;
+                String zipEntryName;
+                ZipEntry zipEntry;
+                while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+                    zipEntryName = zipEntry.getName();
 
-            String zipEntryName;
-            ZipEntry zipEntry;
-            while ((zipEntry = zipInputStream.getNextEntry()) != null)
-            {
-                zipEntryName = zipEntry.getName();
+                    File unzippedFile = new File(destinationFolder, zipEntryName);
 
-                File unzippedFile = new File(destinationFolder, zipEntryName);
+                    // Skip the __MACOSX folders in the .fmear file in case the .fmear archive was
+                    // created on macOS with the __MACOSX resource fork.
+                    if (!zipEntryName.startsWith("__MACOSX")) {
+                        if (zipEntry.isDirectory()) {
+                            // If the entry is a directory, we need to make sure all the parent
+                            // directories leading up to this directory exist before writing a file
+                            // in the directory
+                            unzippedFile.mkdirs();
+                        } else {
+                            // If the entry is a file, we need to make sure all the parent directories
+                            // leading up to this file exist before writing the file to the path.
+                            File subfolder = unzippedFile.getParentFile();
+                            if (subfolder != null) {
+                                subfolder.mkdirs();
+                            }
 
-                // Skip the __MACOSX folders in the .fmear file in case the .fmear archive was
-                // created on macOS with the __MACOSX resource fork.
-                if (!zipEntryName.startsWith("__MACOSX")) {
-                    if (zipEntry.isDirectory()) {
-                        // If the entry is a directory, we need to make sure all the parent
-                        // directories leading up to this directory exist before writing a file
-                        // in the directory
-                        unzippedFile.mkdirs();
-                    } else {
-                        // If the entry is a file, we need to make sure all the parent directories
-                        // leading up to this file exist before writing the file to the path.
-                        File subfolder = unzippedFile.getParentFile();
-                        if (subfolder != null) {
-                            subfolder.mkdirs();
+                            // Now we can unzip the file
+                            Log.i("FME AR", "Unzipping '" + unzippedFile.toString() + "' ...");
+                            FileOutputStream fileOutputStream = new FileOutputStream(unzippedFile);
+                            while ((numBytes = zipInputStream.read(buffer)) > 0) {
+                                fileOutputStream.write(buffer, 0, numBytes);
+                            }
+                            fileOutputStream.close();
                         }
-
-                        // Now we can unzip the file
-                        Log.i("FME AR", "Unzipping '" + unzippedFile.toString() + "' ...");
-                        FileOutputStream fileOutputStream = new FileOutputStream(unzippedFile);
-                        while ((numBytes = zipInputStream.read(buffer)) > 0) {
-                            fileOutputStream.write(buffer, 0, numBytes);
-                        }
-                        fileOutputStream.close();
                     }
+                    zipInputStream.closeEntry();
                 }
-
-                zipInputStream.closeEntry();
             }
-
-            zipInputStream.close();
             mScaleFactor = 1.0f;
         }
-        catch(IOException e)
-        {
-            e.printStackTrace();
-            return false;
-        }
-
-        return true;
     }
 }
