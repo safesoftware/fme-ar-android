@@ -173,6 +173,12 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     return;
                 }
 
+                // Request for Storage access in case we need to load files from SD Card
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    requestExternalStoragePermission();
+                    return;
+                }
+
                 // Create the session.
                 session = new Session(/* context= */ this);
 
@@ -235,10 +241,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         if (requestCode == EXTERNAL_STORAGE_PERMISSION_CODE) {
-            if (results.length == 1 && results[0] == PackageManager.PERMISSION_GRANTED) {
-
-            } else {
-                Toast.makeText(this, "Storage read access is needed to load files", Toast.LENGTH_LONG).show();
+            if (results.length != 1 || results[0] != PackageManager.PERMISSION_GRANTED) {
+                requestExternalStoragePermission();
             }
         }
         if (!CameraPermissionHelper.hasCameraPermission(this)) {
@@ -539,9 +543,11 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         }
         if (intent != null) {
             String action = intent.getAction();
-            if (action.equals(Intent.ACTION_VIEW) || action.equals(Intent.ACTION_OPEN_DOCUMENT)) {
+            if (Intent.ACTION_VIEW.equals(action) || Intent.ACTION_OPEN_DOCUMENT.equals(action)) {
                 Uri uri = intent.getData();
-
+                if (uri == null) {
+                    return false;
+                }
                 // Get the temp directory
                 File tempDir = tempDirectory();
                 initDirectory(tempDir);
@@ -615,15 +621,14 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         if ("content".equalsIgnoreCase(uriScheme)) {
             inputStream = getContentResolver().openInputStream(inputUri);
         } else if ("file".equalsIgnoreCase(uriScheme)) {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                requestExternalStoragePermission();
-                return;
-            }
             inputStream = new FileInputStream(new File(inputUri.getPath()));
         } else {
             throw new IOException("expected Uri with scheme 'content' or 'file', instead: " + uriScheme);
         }
         try {
+            if (inputStream == null) {
+                return;
+            }
             try (ZipInputStream zipInputStream = new ZipInputStream(new BufferedInputStream(inputStream))) {
                 // Create a buffer to read the zip file content
                 byte[] buffer = new byte[1024];
@@ -674,8 +679,11 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     private void requestExternalStoragePermission() {
         if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.READ_EXTERNAL_STORAGE)) {
-            messageSnackbarHelper.showMessage(this, "Storage access required");
+            Toast.makeText(this, R.string.storage_permission, Toast.LENGTH_LONG).show();
+            ActivityCompat.requestPermissions(ARActivity.this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, EXTERNAL_STORAGE_PERMISSION_CODE);
+        } else {
+            Toast.makeText(this, R.string.storage_permission, Toast.LENGTH_LONG).show();
+            CameraPermissionHelper.launchPermissionSettings(this);
         }
-        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, EXTERNAL_STORAGE_PERMISSION_CODE);
     }
 }
