@@ -550,7 +550,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 try {
                     unzipContent(uri, tempDir);
                 } catch (IOException e) {
-                    // TODO: display error - unzip failed
+                    Toast.makeText(this, "Failed to unpack selected file", Toast.LENGTH_LONG).show();
                     e.printStackTrace();
                     return false;
                 }
@@ -558,7 +558,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Find all the .obj files
                 List<File> objFiles = new FileFinder(".obj").find(tempDir);
                 if (objFiles.size() == 0){
-                    // TODO: display error - no .obj found
+                    Toast.makeText(this, "No renderable objects found", Toast.LENGTH_LONG).show();
                     return false;
                 }
                 for (File file : objFiles) {
