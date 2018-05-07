@@ -73,8 +73,8 @@ public class ObjectRenderer {
     }
 
     public void reset() {
-      initialized = false;
       set(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+      initialized = false;
     }
 
     public void set(float newMinX, float newMinY, float newMinZ, float newMaxX, float newMaxY, float newMaxZ) {
@@ -116,6 +116,22 @@ public class ObjectRenderer {
     public float getMaxX() { return maxX; };
     public float getMaxY() { return maxY; };
     public float getMaxZ() { return maxZ; };
+
+    public float[] getCenter() {
+      return new float[] {
+              (getMinX() + getMaxX()) * 0.5f,
+              (getMinY() + getMaxY()) * 0.5f,
+              (getMinZ() + getMaxZ()) * 0.5f
+      };
+    }
+
+    public float[] getSize() {
+      return new float[] {
+              (getMaxX() - getMinX()),
+              (getMaxY() - getMinY()),
+              (getMaxZ() - getMinZ())
+      };
+    }
 
     boolean initialized = false;
     public float minX = 0.0f;
@@ -636,18 +652,40 @@ public class ObjectRenderer {
    * @param scaleFactor A separate scaling factor to apply before the {@code modelMatrix}.
    * @see android.opengl.Matrix
    */
-  public void updateModelMatrix(float[] modelMatrix, float scaleFactor) {
+  public void updateModelMatrix(float[] modelMatrix, float scaleFactor, float rotateFactor) {
 
     if (!initialized) {
       return;
     }
 
-    float[] scaleMatrix = new float[16];
-    Matrix.setIdentityM(scaleMatrix, 0);
-    scaleMatrix[0] = scaleFactor;
-    scaleMatrix[5] = scaleFactor;
-    scaleMatrix[10] = scaleFactor;
-    Matrix.multiplyMM(this.modelMatrix, 0, modelMatrix, 0, scaleMatrix, 0);
+    // Use a matrix to calculate the orientation of th model
+    float[] orientationMatrix = new float[16];
+    Matrix.setIdentityM(orientationMatrix, 0);
+
+    Bounds bounds = getDatasetBounds();
+    if (bounds.isValid()) {
+      float[] datasetCenter = datasetBounds.getCenter();
+
+      // Rotate the model -90 degrees around the original x-axis
+      Matrix.rotateM(orientationMatrix, 0, -90, 1, 0, 0);
+
+      // Rotate the model based on the rotateFactor around the original z-axis
+      Matrix.rotateM(orientationMatrix, 0, -rotateFactor, 0, 0, 1);
+
+      // Scale the model based on the scaleFactor, but also include an initial 25cm bound on each
+      // side of the 3 axes.
+      final float maxLength = 0.25f * scaleFactor;
+      float[] boundSize = bounds.getSize();
+      float maxSize = Math.max(boundSize[0], Math.max(boundSize[1], boundSize[2]));
+      Matrix.scaleM(orientationMatrix, 0,maxLength / maxSize, maxLength / maxSize, maxLength / maxSize);
+
+      // Translate the model so that the model is centered on the xy plane and on the anchor point
+      Matrix.translateM(orientationMatrix, 0, -datasetCenter[0], -datasetCenter[1], -bounds.getMinZ());
+
+      // Calculate the final model matrix by multiplying the anchor matrix A with the orientation
+      // matrix B to get AB.
+      Matrix.multiplyMM(this.modelMatrix, 0, modelMatrix, 0, orientationMatrix, 0);
+    }
   }
 
   /**
