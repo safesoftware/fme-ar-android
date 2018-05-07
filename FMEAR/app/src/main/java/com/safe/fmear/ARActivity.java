@@ -1,20 +1,23 @@
 package com.safe.fmear;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
 import android.os.Bundle;
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.widget.PopupMenu;
-import android.view.ScaleGestureDetector;
 import android.widget.Toast;
 
 import com.almeros.android.multitouch.RotateGestureDetector;
@@ -26,7 +29,6 @@ import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.core.Point;
 import com.google.ar.core.PointCloud;
-import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
 import com.google.ar.core.TrackingState;
@@ -48,6 +50,7 @@ import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationExceptio
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -62,6 +65,7 @@ import javax.microedition.khronos.opengles.GL10;
 // =================================================================================================
 // ARActivity
 public class ARActivity extends AppCompatActivity implements GLSurfaceView.Renderer {
+    private static final int EXTERNAL_STORAGE_PERMISSION_CODE = 123;
     private static final String TAG = ARActivity.class.getSimpleName();
     private static final float FME_TO_OPENGL_ROTATION_ANGLE = (float) 270;
 
@@ -169,6 +173,12 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     return;
                 }
 
+                // Request for Storage access in case we need to load files from SD Card
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    requestExternalStoragePermission();
+                    return;
+                }
+
                 // Create the session.
                 session = new Session(/* context= */ this);
 
@@ -230,6 +240,11 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        if (requestCode == EXTERNAL_STORAGE_PERMISSION_CODE) {
+            if (results.length != 1 || results[0] != PackageManager.PERMISSION_GRANTED) {
+                requestExternalStoragePermission();
+            }
+        }
         if (!CameraPermissionHelper.hasCameraPermission(this)) {
             Toast.makeText(this, "Camera permission is needed to run this application", Toast.LENGTH_LONG)
                     .show();
@@ -499,7 +514,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     // unzip the data, assuming it's a .fmear file, into the temp directory named "fmear" in the
     // default cache directory.
     private boolean extractDatasetFromIntent(Intent resultData) {
-        boolean result = false;
         Intent intent;
         if (resultData != null) {
             intent = resultData;
@@ -508,26 +522,36 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         }
         if (intent != null) {
             String action = intent.getAction();
-            if (action.equals(Intent.ACTION_VIEW) || action.equals(Intent.ACTION_OPEN_DOCUMENT)) {
+            if (Intent.ACTION_VIEW.equals(action) || Intent.ACTION_OPEN_DOCUMENT.equals(action)) {
                 Uri uri = intent.getData();
-
+                if (uri == null) {
+                    return false;
+                }
                 // Get the temp directory
                 File tempDir = tempDirectory();
                 initDirectory(tempDir);
 
                 // Unzip the content to the temporary directory
-                result = unzipContent(uri, tempDir);
+                try {
+                    unzipContent(uri, tempDir);
+                } catch (IOException e) {
+                    Toast.makeText(this, "Failed to unpack selected file", Toast.LENGTH_LONG).show();
+                    e.printStackTrace();
+                    return false;
+                }
 
                 // Find all the .obj files
                 List<File> objFiles = new FileFinder(".obj").find(tempDir);
+                if (objFiles.size() == 0){
+                    Toast.makeText(this, "No renderable objects found", Toast.LENGTH_LONG).show();
+                    return false;
+                }
                 for (File file : objFiles) {
                     Log.d("FME AR", "OBJ File: " + file.toString());
                 }
             }
         }
-        anchors.clear();
-
-        return result;
+        return true;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -570,63 +594,75 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     // ---------------------------------------------------------------------------------------------
     // This function unzip the content from the contentPath to the destinationFolder. This
     // function creates all the directories necessary for the unzipped files.
-    private boolean unzipContent(Uri contentPath, File destinationFolder)
-    {
-        try
-        {
-            InputStream inputStream = getContentResolver().openInputStream(contentPath);
-            ZipInputStream zipInputStream = new ZipInputStream(new BufferedInputStream(inputStream));
-
-            // Create a buffer to read the zip file content
-            byte[] buffer = new byte[1024];
-            int numBytes;
-
-            String zipEntryName;
-            ZipEntry zipEntry;
-            while ((zipEntry = zipInputStream.getNextEntry()) != null)
-            {
-                zipEntryName = zipEntry.getName();
-
-                File unzippedFile = new File(destinationFolder, zipEntryName);
-
-                // Skip the __MACOSX folders in the .fmear file in case the .fmear archive was
-                // created on macOS with the __MACOSX resource fork.
-                if (!zipEntryName.startsWith("__MACOSX")) {
-                    if (zipEntry.isDirectory()) {
-                        // If the entry is a directory, we need to make sure all the parent
-                        // directories leading up to this directory exist before writing a file
-                        // in the directory
-                        unzippedFile.mkdirs();
-                    } else {
-                        // If the entry is a file, we need to make sure all the parent directories
-                        // leading up to this file exist before writing the file to the path.
-                        File subfolder = unzippedFile.getParentFile();
-                        if (subfolder != null) {
-                            subfolder.mkdirs();
-                        }
-
-                        // Now we can unzip the file
-                        Log.i("FME AR", "Unzipping '" + unzippedFile.toString() + "' ...");
-                        FileOutputStream fileOutputStream = new FileOutputStream(unzippedFile);
-                        while ((numBytes = zipInputStream.read(buffer)) > 0) {
-                            fileOutputStream.write(buffer, 0, numBytes);
-                        }
-                        fileOutputStream.close();
-                    }
-                }
-
-                zipInputStream.closeEntry();
+    private void unzipContent(Uri inputUri, File destinationFolder) throws IOException {
+        InputStream inputStream;
+        String uriScheme = inputUri.getScheme();
+        if ("content".equalsIgnoreCase(uriScheme)) {
+            inputStream = getContentResolver().openInputStream(inputUri);
+        } else if ("file".equalsIgnoreCase(uriScheme)) {
+            inputStream = new FileInputStream(new File(inputUri.getPath()));
+        } else {
+            throw new IOException("expected Uri with scheme 'content' or 'file', instead: " + uriScheme);
+        }
+        try {
+            if (inputStream == null) {
+                return;
             }
+            try (ZipInputStream zipInputStream = new ZipInputStream(new BufferedInputStream(inputStream))) {
+                // Create a buffer to read the zip file content
+                byte[] buffer = new byte[1024];
+                int numBytes;
 
-            zipInputStream.close();
+                String zipEntryName;
+                ZipEntry zipEntry;
+                while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+                    zipEntryName = zipEntry.getName();
+
+                    File unzippedFile = new File(destinationFolder, zipEntryName);
+
+                    // Skip the __MACOSX folders in the .fmear file in case the .fmear archive was
+                    // created on macOS with the __MACOSX resource fork.
+                    if (!zipEntryName.startsWith("__MACOSX")) {
+                        if (zipEntry.isDirectory()) {
+                            // If the entry is a directory, we need to make sure all the parent
+                            // directories leading up to this directory exist before writing a file
+                            // in the directory
+                            unzippedFile.mkdirs();
+                        } else {
+                            // If the entry is a file, we need to make sure all the parent directories
+                            // leading up to this file exist before writing the file to the path.
+                            File subfolder = unzippedFile.getParentFile();
+                            if (subfolder != null) {
+                                subfolder.mkdirs();
+                            }
+
+                            // Now we can unzip the file
+                            Log.i("FME AR", "Unzipping '" + unzippedFile.toString() + "' ...");
+                            FileOutputStream fileOutputStream = new FileOutputStream(unzippedFile);
+                            while ((numBytes = zipInputStream.read(buffer)) > 0) {
+                                fileOutputStream.write(buffer, 0, numBytes);
+                            }
+                            fileOutputStream.close();
+                        }
+                    }
+                    zipInputStream.closeEntry();
+                }
+            }
             mScaleFactor = 1.0f;
+        } finally {
+            if (inputStream != null) {
+                inputStream.close();
+            }
         }
-        catch(IOException e)
-        {
-            e.printStackTrace();
-            return false;
-        }
+    }
 
-        return true;
+    private void requestExternalStoragePermission() {
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.READ_EXTERNAL_STORAGE)) {
+            Toast.makeText(this, R.string.storage_permission, Toast.LENGTH_LONG).show();
+            ActivityCompat.requestPermissions(ARActivity.this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, EXTERNAL_STORAGE_PERMISSION_CODE);
+        } else {
+            Toast.makeText(this, R.string.storage_permission, Toast.LENGTH_LONG).show();
+            CameraPermissionHelper.launchPermissionSettings(this);
+        }
     }
 }
