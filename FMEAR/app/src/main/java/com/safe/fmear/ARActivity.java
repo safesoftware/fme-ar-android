@@ -386,31 +386,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     }
                 }
 
-                float offsetX = 0.0f;
-                float offsetY = 0.0f;
-                float offsetZ = 0.0f;
-                ObjectRenderer.Bounds datasetBounds = objectRenderer.getDatasetBounds();
-                if (datasetBounds.isValid()) {
-                    // We want to offset the dataset so that it's center at 0, 0,...
-                    offsetX = -(datasetBounds.getMaxX() + datasetBounds.getMinX()) / 2.0f;
-                    offsetY = -(datasetBounds.getMaxY() + datasetBounds.getMinY()) / 2.0f;
+                // Update the model matrix
+                objectRenderer.updateModelMatrix(anchorMatrix, mScaleFactor, mRotateAngle);
 
-                    // but we want to set the dataset to touch the detected horizontal plane (and
-                    // not having the  plane cut through the middle of the dataset)
-                    offsetZ = -datasetBounds.getMinZ()/2.0f;
-                }
-
-                // Rotate model 270 degrees around the x axis, this is needed to translate
-                // between FMEAR's understanding of the z-axis (pointing upwards) to opengl's where
-                // the z-axis is flat while the y-axis points up
-                Matrix.rotateM(anchorMatrix, 0, FME_TO_OPENGL_ROTATION_ANGLE, 1, 0, 0);
-
-                // Rotate model by angle detected from two finger gesture
-                Matrix.rotateM(anchorMatrix, 0, -mRotateAngle, 0, 0, 1);
-
-                Matrix.translateM(anchorMatrix, 0, offsetX*mScaleFactor, offsetY*mScaleFactor, offsetZ*mScaleFactor);
-
-                objectRenderer.updateModelMatrix(anchorMatrix, mScaleFactor);
+                // Draw the model
                 objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba);
             }
 
@@ -546,6 +525,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 }
             }
         }
+        anchors.clear();
 
         return result;
     }
