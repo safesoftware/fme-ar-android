@@ -36,6 +36,7 @@ import com.google.ar.core.examples.java.common.helpers.CameraPermissionHelper;
 import com.google.ar.core.examples.java.common.helpers.DisplayRotationHelper;
 import com.google.ar.core.examples.java.common.helpers.FullScreenHelper;
 import com.google.ar.core.examples.java.common.helpers.SnackbarHelper;
+import com.google.ar.core.examples.java.common.helpers.StoragePermissionHelper;
 import com.google.ar.core.examples.java.common.helpers.TapHelper;
 import com.google.ar.core.examples.java.common.rendering.BackgroundRenderer;
 import com.google.ar.core.examples.java.common.rendering.ObjectRenderer;
@@ -174,8 +175,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 }
 
                 // Request for Storage access in case we need to load files from SD Card
-                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    requestExternalStoragePermission();
+                if (!StoragePermissionHelper.hasPermission(this)) {
+                    StoragePermissionHelper.requestPermission(this);
                     return;
                 }
 
@@ -240,19 +241,27 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
-        if (requestCode == EXTERNAL_STORAGE_PERMISSION_CODE) {
-            if (results.length != 1 || results[0] != PackageManager.PERMISSION_GRANTED) {
-                requestExternalStoragePermission();
-            }
-        }
-        if (!CameraPermissionHelper.hasCameraPermission(this)) {
-            Toast.makeText(this, "Camera permission is needed to run this application", Toast.LENGTH_LONG)
-                    .show();
-            if (!CameraPermissionHelper.shouldShowRequestPermissionRationale(this)) {
-                // Permission denied with checking "Do not ask again".
-                CameraPermissionHelper.launchPermissionSettings(this);
-            }
-            finish();
+        switch (requestCode) {
+            case StoragePermissionHelper.STORAGE_PERMISSION_CODE:
+                if (!StoragePermissionHelper.hasPermission(this)) {
+                    Toast.makeText(this, R.string.storage_permission, Toast.LENGTH_LONG).show();
+                    if (!StoragePermissionHelper.shouldShowRequestPermissionRationale(this)) {
+                        StoragePermissionHelper.launchPermissionSettings(this);
+                    }
+                    finish();
+                }
+                break;
+            case CameraPermissionHelper.CAMERA_PERMISSION_CODE:
+                if (!CameraPermissionHelper.hasCameraPermission(this)) {
+                    Toast.makeText(this, "Camera permission is needed to run this application", Toast.LENGTH_LONG)
+                            .show();
+                    if (!CameraPermissionHelper.shouldShowRequestPermissionRationale(this)) {
+                        // Permission denied with checking "Do not ask again".
+                        CameraPermissionHelper.launchPermissionSettings(this);
+                    }
+                    finish();
+                }
+                break;
         }
     }
 
@@ -653,16 +662,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             if (inputStream != null) {
                 inputStream.close();
             }
-        }
-    }
-
-    private void requestExternalStoragePermission() {
-        if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.READ_EXTERNAL_STORAGE)) {
-            Toast.makeText(this, R.string.storage_permission, Toast.LENGTH_LONG).show();
-            ActivityCompat.requestPermissions(ARActivity.this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, EXTERNAL_STORAGE_PERMISSION_CODE);
-        } else {
-            Toast.makeText(this, R.string.storage_permission, Toast.LENGTH_LONG).show();
-            CameraPermissionHelper.launchPermissionSettings(this);
         }
     }
 }
