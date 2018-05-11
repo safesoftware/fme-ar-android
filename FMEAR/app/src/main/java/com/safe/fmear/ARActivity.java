@@ -151,9 +151,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         // If we successfully extracted the content from a .fmear file, we will set the boolean
         // datasetDrawRequested to true. Then, in onDrawFrame, we load the obj and update the
         // geometry.
-//        performFileSearch();
+
+        // Pass null to unzipping AsyncTask to set datasetDrawRequested.
         if (!datasetDrawRequested) {
-            //datasetDrawRequested = extractDatasetFromIntent(null);
             new UnzipTask().execute((Intent) null);
         }
 
@@ -456,8 +456,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 resultData.setAction(Intent.ACTION_OPEN_DOCUMENT);
                 Log.i(TAG, "Uri: " + uri.toString());
 
-                // add call to asynctask
-                //datasetDrawRequested = extractDatasetFromIntent(resultData);
+                // Call anon AsyncTask to unzip files in background
                 new UnzipTask().execute(resultData);
             }
             // END_INCLUDE (parse_open_document_response)
@@ -560,6 +559,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         Log.i("FME AR", "Temp directory: \"" + dir.toString() + "\"");
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // This class unzips the .fmear file in the background on a separate thread to free up the
+    // GUI thread.
     private class UnzipTask extends AsyncTask<Intent, Integer, Boolean> {
 
         @Override
@@ -572,7 +574,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             Log.e(TAG, "Finished unzipping FMEAR file..");
         }
 
-        // ---------------------------------------------------------------------------------------------
+        // -----------------------------------------------------------------------------------------
         // This function gets the data from the view intent. If the data exists, this function will
         // unzip the data, assuming it's a .fmear file, into the temp directory named "fmear" in the
         // default cache directory.
@@ -617,7 +619,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             return true;
         }
 
-        // ---------------------------------------------------------------------------------------------
+        // -----------------------------------------------------------------------------------------
         // This function unzip the content from the contentPath to the destinationFolder. This
         // function creates all the directories necessary for the unzipped files.
         private void unzipContent(Uri inputUri, File destinationFolder) throws IOException {
@@ -646,17 +648,18 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
                         File unzippedFile = new File(destinationFolder, zipEntryName);
 
-                        // Skip the __MACOSX folders in the .fmear file in case the .fmear archive was
-                        // created on macOS with the __MACOSX resource fork.
+                        // Skip the __MACOSX folders in the .fmear file in case the .fmear archive
+                        // was created on macOS with the __MACOSX resource fork.
                         if (!zipEntryName.startsWith("__MACOSX")) {
                             if (zipEntry.isDirectory()) {
                                 // If the entry is a directory, we need to make sure all the parent
-                                // directories leading up to this directory exist before writing a file
-                                // in the directory
+                                // directories leading up to this directory exist before writing a
+                                // file in the directory
                                 unzippedFile.mkdirs();
                             } else {
-                                // If the entry is a file, we need to make sure all the parent directories
-                                // leading up to this file exist before writing the file to the path.
+                                // If the entry is a file, we need to make sure all the parent
+                                // directories leading up to this file exist before writing the
+                                // file to the path.
                                 File subfolder = unzippedFile.getParentFile();
                                 if (subfolder != null) {
                                     subfolder.mkdirs();
