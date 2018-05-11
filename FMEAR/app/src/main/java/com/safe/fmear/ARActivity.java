@@ -19,6 +19,7 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.widget.PopupMenu;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import com.almeros.android.multitouch.RotateGestureDetector;
@@ -564,6 +565,13 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     // GUI thread.
     private class UnzipTask extends AsyncTask<Intent, Integer, Boolean> {
 
+        private ProgressBar progressBar;
+
+        protected void onPreExecute() {
+            progressBar = findViewById(R.id.progressbar);
+            progressBar.setVisibility(View.VISIBLE);
+        }
+
         @Override
         protected Boolean doInBackground(Intent... intents) {
             return extractDatasetFromIntent(intents[0]);
@@ -572,6 +580,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         protected void onPostExecute(Boolean result) {
             datasetDrawRequested = result;
             Log.e(TAG, "Finished unzipping FMEAR file..");
+            progressBar.setVisibility(View.INVISIBLE);
         }
 
         // -----------------------------------------------------------------------------------------
