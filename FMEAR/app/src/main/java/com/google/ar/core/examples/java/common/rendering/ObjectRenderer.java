@@ -33,9 +33,11 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import de.javagl.obj.FloatTuple;
 import de.javagl.obj.FloatTuples;
@@ -164,7 +166,13 @@ public class ObjectRenderer {
       public int numNormals = 0;
       public int numTexCoords = 0;
       public int indexCount = 0;
-    };
+
+      // matches the default values in DefaultMtl.java
+      private FloatTuple ambient = FloatTuples.create(0f, 0f, 0f);
+      private FloatTuple diffuse = FloatTuples.create(0f, 0f, 0f);
+      private FloatTuple specular = FloatTuples.create(0f, 0f, 0f);
+      private float shininess = 100f;
+    }
 
     public String objFilename;
     public Bounds bounds = new Bounds();
@@ -202,7 +210,10 @@ public class ObjectRenderer {
   private int lightingParametersUniform;
 
   // Shader location: material properties.
-  private int materialParametersUniform;
+  private int materialAmbientUniform;
+  private int materialDiffuseUniform;
+  private int materialSpecularUniform;
+  private int materialShininessUniform;
 
   // Shader location: color correction property
   private int colorCorrectionParameterUniform;
@@ -213,12 +224,6 @@ public class ObjectRenderer {
   private final float[] modelMatrix = new float[16];
   private final float[] modelViewMatrix = new float[16];
   private final float[] modelViewProjectionMatrix = new float[16];
-
-  // Set some default material properties to use for lighting.
-  private float ambient = 0.3f;
-  private float diffuse = 1.0f;
-  private float specular = 1.0f;
-  private float specularPower = 6.0f;
 
   private boolean initialized = false;
 
@@ -257,7 +262,10 @@ public class ObjectRenderer {
     textureUniform = GLES20.glGetUniformLocation(program, "u_Texture");
 
     lightingParametersUniform = GLES20.glGetUniformLocation(program, "u_LightingParameters");
-    materialParametersUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters");
+    materialAmbientUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters.ambient");
+    materialDiffuseUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters.diffuse");
+    materialSpecularUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters.specular");
+    materialShininessUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters.shininess");
     colorCorrectionParameterUniform =
             GLES20.glGetUniformLocation(program, "u_ColorCorrectionParameters");
 
@@ -327,8 +335,6 @@ public class ObjectRenderer {
         // 4. Convert it to single-indexed data
         objObject = ObjUtils.convertToRenderable(objObject);
 
-//        int numMaterialGroups = obj.getNumMaterialGroups();
-
         // For every obj file, store the properties for later use
         ObjProperty objProperty = new ObjProperty();
         objProperty.objFilename = objFile.toString();
@@ -361,13 +367,19 @@ public class ObjectRenderer {
 
           // If we can read a material and or a texture, we store it in the property.
           MtlAndTexture mtlAndTexture = materialsByName.get(materialName);
-          Mtl mtl = null;
           if (mtlAndTexture != null) {
-            mtl = mtlAndTexture.getMtl();
+            Mtl material = mtlAndTexture.getMtl();
             File textureFile = mtlAndTexture.getTextureFile();
-            if (textureFile.exists()) {
+            if (textureFile != null && textureFile.exists()) {
               materialProperty.textureId = loadTexture(context, textureFile);
               materialProperty.hasTexture = true;
+            }
+            if (material != null) {
+              materialProperty.ambient = material.getKa();
+              materialProperty.diffuse = material.getKd();
+              materialProperty.specular = material.getKs();
+
+              materialProperty.shininess = material.getNs();
             }
           }
 
@@ -435,8 +447,6 @@ public class ObjectRenderer {
           }
 
           ShaderUtil.checkGLError(TAG, "OBJ buffer load");
-
-          setMaterialProperties(mtl);
         }
 
         datasetBounds.expandBy(objProperty.bounds);
@@ -611,17 +621,13 @@ public class ObjectRenderer {
         if (materialInputStream != null) {
           List<Mtl> mtls = MtlReader.read(materialInputStream);
           for (Mtl mtl : mtls) {
+            File textureFile = null;
             // TODO: can we get multiple texture files for a single material group?
             if(mtl.getMapKd() != null) {
               String textureFileLocation = mtl.getMapKd().replaceAll("\\\\", "/");
-              File textureFile = new File(mtlDir, textureFileLocation);
-              if (textureFile.exists()) {
-                mtlAndTextures.add(new MtlAndTexture(mtl, textureFile));
-              } else {
-                // TODO: properly handle materials without texture files
-                mtlAndTextures.add(new MtlAndTexture(mtl, null));
-              }
+              textureFile = new File(mtlDir, textureFileLocation);
             }
+            mtlAndTextures.add(new MtlAndTexture(mtl, textureFile));
           }
         }
       }
@@ -689,26 +695,6 @@ public class ObjectRenderer {
   }
 
   /**
-   * Sets the surface characteristics of the rendered model.
-   *
-   * @param material
-   */
-  public void setMaterialProperties(Mtl material) {
-    if (material == null) {
-      return;
-    }
-    // TODO: how to convert these Float Tuples into single floats ? 7
-//    this.ambient = material.getKa();
-//    this.diffuse = material.getKd();
-//    this.specular = material.getKs();
-    // this.specular = material.getNs()
-    this.ambient = 0.5f;
-    this.diffuse = 0.5f;
-    this.specular = 0.5f;
-    this.specularPower = material.getNs();
-  }
-
-  /**
    * Draws the model.
    *
    * @param cameraView A 4x4 view matrix, in column-major order.
@@ -752,8 +738,6 @@ public class ObjectRenderer {
         colorCorrectionRgba[2],
         colorCorrectionRgba[3]);
 
-    // Set the object material properties.
-    GLES20.glUniform4f(materialParametersUniform, ambient, diffuse, specular, specularPower);
 
     for (ObjProperty objProperty : objProperties) {
       for (ObjProperty.MaterialProperty materialProperty : objProperty.materialProperties) {
@@ -763,6 +747,17 @@ public class ObjectRenderer {
           GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
           GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, materialProperty.textureId);
           GLES20.glUniform1i(textureUniform, 0);
+        } else {
+          // Set the object material properties.
+          GLES20.glUniform3f(materialAmbientUniform, materialProperty.ambient.getX(), materialProperty.ambient.getY(), materialProperty.ambient.getZ());
+          GLES20.glUniform3f(materialDiffuseUniform, materialProperty.diffuse.getX(), materialProperty.diffuse.getY(), materialProperty.diffuse.getZ());
+          GLES20.glUniform3f(materialSpecularUniform, materialProperty.specular.getX(), materialProperty.specular.getY(), materialProperty.specular.getZ());
+          GLES20.glUniform1f(materialShininessUniform, materialProperty.shininess);
+//          Random random = new Random();
+//          GLES20.glUniform3f(materialAmbientUniform, (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()));
+//          GLES20.glUniform3f(materialDiffuseUniform, (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()));
+//          GLES20.glUniform3f(materialSpecularUniform, (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()));
+//          GLES20.glUniform1f(materialShininessUniform, random.nextInt(128));
         }
 
         // Set the vertex attributes.
