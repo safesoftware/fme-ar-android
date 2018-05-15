@@ -1,16 +1,12 @@
 package com.safe.fmear;
 
-import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
-import android.opengl.Matrix;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.MenuInflater;
@@ -68,9 +64,7 @@ import javax.microedition.khronos.opengles.GL10;
 // =================================================================================================
 // ARActivity
 public class ARActivity extends AppCompatActivity implements GLSurfaceView.Renderer {
-    private static final int EXTERNAL_STORAGE_PERMISSION_CODE = 123;
     private static final String TAG = ARActivity.class.getSimpleName();
-    private static final float FME_TO_OPENGL_ROTATION_ANGLE = (float) 270;
 
     // Rendering. The Renderers are created here, and initialized when the GL surface is created.
     private GLSurfaceView surfaceView;

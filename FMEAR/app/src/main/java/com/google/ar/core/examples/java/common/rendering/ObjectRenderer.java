@@ -33,11 +33,9 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 import de.javagl.obj.FloatTuple;
 import de.javagl.obj.FloatTuples;
@@ -753,11 +751,6 @@ public class ObjectRenderer {
           GLES20.glUniform3f(materialDiffuseUniform, materialProperty.diffuse.getX(), materialProperty.diffuse.getY(), materialProperty.diffuse.getZ());
           GLES20.glUniform3f(materialSpecularUniform, materialProperty.specular.getX(), materialProperty.specular.getY(), materialProperty.specular.getZ());
           GLES20.glUniform1f(materialShininessUniform, materialProperty.shininess);
-//          Random random = new Random();
-//          GLES20.glUniform3f(materialAmbientUniform, (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()));
-//          GLES20.glUniform3f(materialDiffuseUniform, (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()));
-//          GLES20.glUniform3f(materialSpecularUniform, (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()), (float) Math.sin(random.nextDouble()));
-//          GLES20.glUniform1f(materialShininessUniform, random.nextInt(128));
         }
 
         // Set the vertex attributes.
