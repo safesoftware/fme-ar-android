@@ -52,6 +52,15 @@ import de.javagl.obj.Objs;
 
 /** Renders an object loaded from an OBJ file in OpenGL. */
 public class ObjectRenderer {
+
+  private static FloatTuple createDefaultDiffuse() {
+    return FloatTuples.create(0.5f, 0.5f, 0.5f);
+  }
+
+  private static FloatTuple createDefaultAmbient() {
+    return FloatTuples.create(0.2f, 0.2f, 0.2f);
+  }
+
   private static final String TAG = ObjectRenderer.class.getSimpleName();
 
   /**
@@ -165,9 +174,8 @@ public class ObjectRenderer {
       public int numTexCoords = 0;
       public int indexCount = 0;
 
-      // Arbitrarily chosen defaults for ambient, diffuse, and specular
-      private FloatTuple ambient = FloatTuples.create(0.2f, 0.2f, 0.2f);
-      private FloatTuple diffuse = FloatTuples.create(0.5f, 0.5f, 0.5f);
+      private FloatTuple ambient = createDefaultAmbient();
+      private FloatTuple diffuse = createDefaultDiffuse();
       private FloatTuple specular = FloatTuples.create(0f, 0f, 0f);
       // matches default values in DefaultMtl.java
       private float shininess = 100f;
@@ -380,8 +388,22 @@ public class ObjectRenderer {
               materialProperty.hasTexture = true;
             }
             if (material != null) {
-              materialProperty.ambient = material.getKa();
-              materialProperty.diffuse = material.getKd();
+              FloatTuple ka = material.getKa();
+              FloatTuple kd = material.getKd();
+
+              if (!containsColor(ka) && !containsColor(kd)) { // pitch black, probably simply undefined
+                if (materialProperty.hasTexture) {
+                  materialProperty.ambient = FloatTuples.create(1.0f, 1.0f, 1.0f);
+                  materialProperty.diffuse = kd;
+                } else {
+                  materialProperty.ambient = createDefaultAmbient();
+                  materialProperty.diffuse = createDefaultDiffuse();
+                }
+              } else {
+                materialProperty.ambient = ka;
+                materialProperty.diffuse = kd;
+              }
+
               materialProperty.specular = material.getKs();
               materialProperty.shininess = material.getNs();
               materialProperty.opacity = material.getD();
@@ -457,6 +479,10 @@ public class ObjectRenderer {
         datasetBounds.expandBy(objProperty.bounds);
       }
     }
+  }
+
+  private boolean containsColor(FloatTuple rgb) {
+    return (rgb.getX() != 0f || rgb.getY() != 0f || rgb.getZ() != 0f);
   }
 
   public Bounds getDatasetBounds() { return datasetBounds; };
