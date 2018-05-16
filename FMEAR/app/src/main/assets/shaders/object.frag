@@ -26,6 +26,7 @@ struct Material {
 };
 
 uniform Material u_MaterialParameters;
+uniform vec4 u_ObjectColorCorrection; // used for texture-less objects
 
 uniform vec4 u_ColorCorrectionParameters;
 
@@ -68,10 +69,10 @@ void main() {
 
     // Apply inverse SRGB gamma to the texture before making lighting calculations.
     // Flip the y-texture coordinate to address the texture from top-left.
-    vec4 objectColor = texture2D(u_Texture, vec2(v_TexCoord.x, 1.0 - v_TexCoord.y));
+    // if no texture, u_ObjectColorCorrection will be pure white(1,1,1), otherwise black(0,0,0)
+    vec4 objectColor = texture2D(u_Texture, vec2(v_TexCoord.x, 1.0 - v_TexCoord.y)) + u_ObjectColorCorrection;
 
-    // In practice, we'll have color from either texture OR ambient + diffuse
-    objectColor.rgb = objectColor.rgb + (ambient + diffuse);
+    objectColor.rgb = objectColor.rgb * (ambient + diffuse);
     objectColor.rgb = pow(objectColor.rgb, vec3(kInverseGamma));
 
     vec3 color = objectColor.rgb + specular;
