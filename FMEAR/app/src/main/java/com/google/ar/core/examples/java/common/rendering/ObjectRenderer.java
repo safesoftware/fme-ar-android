@@ -165,10 +165,11 @@ public class ObjectRenderer {
       public int numTexCoords = 0;
       public int indexCount = 0;
 
-      // matches the default values in DefaultMtl.java
-      private FloatTuple ambient = FloatTuples.create(0f, 0f, 0f);
-      private FloatTuple diffuse = FloatTuples.create(0f, 0f, 0f);
+      // Arbitrarily chosen defaults for ambient, diffuse, and specular (no shininess)
+      private FloatTuple ambient = FloatTuples.create(0.2f, 0.2f, 0.2f);
+      private FloatTuple diffuse = FloatTuples.create(1f, 1f, 1f);
       private FloatTuple specular = FloatTuples.create(0f, 0f, 0f);
+      // matches the default value in DefaultMtl.java
       private float shininess = 100f;
     }
 
