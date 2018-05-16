@@ -745,6 +745,12 @@ public class ObjectRenderer {
           GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
           GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, materialProperty.textureId);
           GLES20.glUniform1i(textureUniform, 0);
+
+          // Do not assume specular + shininess, obtain color only from texture
+          GLES20.glUniform3f(materialAmbientUniform, 0f, 0f, 0f);
+          GLES20.glUniform3f(materialDiffuseUniform, 0f, 0f, 0f);
+          GLES20.glUniform3f(materialSpecularUniform, 0f, 0f, 0f);
+          GLES20.glUniform1f(materialShininessUniform, 0f);
         } else {
           // Set the object material properties.
           GLES20.glUniform3f(materialAmbientUniform, materialProperty.ambient.getX(), materialProperty.ambient.getY(), materialProperty.ambient.getZ());
