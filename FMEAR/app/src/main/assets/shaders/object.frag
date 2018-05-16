@@ -26,6 +26,7 @@ struct Material {
 };
 
 uniform Material u_MaterialParameters;
+uniform float u_MaterialOpacity;
 uniform vec4 u_ObjectColorCorrection; // used for texture-less objects
 
 uniform vec4 u_ColorCorrectionParameters;

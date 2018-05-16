@@ -165,12 +165,13 @@ public class ObjectRenderer {
       public int numTexCoords = 0;
       public int indexCount = 0;
 
-      // Arbitrarily chosen defaults for ambient, diffuse, and specular (no shininess)
+      // Arbitrarily chosen defaults for ambient, diffuse, and specular
       private FloatTuple ambient = FloatTuples.create(0.2f, 0.2f, 0.2f);
       private FloatTuple diffuse = FloatTuples.create(0.5f, 0.5f, 0.5f);
       private FloatTuple specular = FloatTuples.create(0f, 0f, 0f);
-      // matches the default value in DefaultMtl.java
+      // matches default values in DefaultMtl.java
       private float shininess = 100f;
+      private float opacity = 1.0f;
     }
 
     public String objFilename;
@@ -214,6 +215,7 @@ public class ObjectRenderer {
   private int materialDiffuseUniform;
   private int materialSpecularUniform;
   private int materialShininessUniform;
+  private int materialOpacityUniform;
 
   // Shader location: color correction property
   private int colorCorrectionParameterUniform;
@@ -267,6 +269,8 @@ public class ObjectRenderer {
     materialDiffuseUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters.diffuse");
     materialSpecularUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters.specular");
     materialShininessUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters.shininess");
+    materialOpacityUniform = GLES20.glGetUniformLocation(program, "u_MaterialOpacity");
+
     colorCorrectionParameterUniform =
             GLES20.glGetUniformLocation(program, "u_ColorCorrectionParameters");
 
@@ -379,8 +383,8 @@ public class ObjectRenderer {
               materialProperty.ambient = material.getKa();
               materialProperty.diffuse = material.getKd();
               materialProperty.specular = material.getKs();
-
               materialProperty.shininess = material.getNs();
+              materialProperty.opacity = material.getD();
             }
           }
 
@@ -752,8 +756,8 @@ public class ObjectRenderer {
           // set object color correction to black (we have texture)
           GLES20.glUniform4f(objectColorCorrectionUniform, 0f, 0f, 0f, 0f);
         } else {
-          // set object color correction to white (no texture)
-          GLES20.glUniform4f(objectColorCorrectionUniform, 1f, 1f, 1f, 0f);
+          // set white texture
+          GLES20.glUniform4f(objectColorCorrectionUniform, 1f, 1f, 1f, 1f);
         }
 
         // Set material properites
@@ -761,6 +765,7 @@ public class ObjectRenderer {
         GLES20.glUniform3f(materialDiffuseUniform, materialProperty.diffuse.getX(), materialProperty.diffuse.getY(), materialProperty.diffuse.getZ());
         GLES20.glUniform3f(materialSpecularUniform, materialProperty.specular.getX(), materialProperty.specular.getY(), materialProperty.specular.getZ());
         GLES20.glUniform1f(materialShininessUniform, materialProperty.shininess);
+        GLES20.glUniform1f(materialOpacityUniform, materialProperty.opacity);
 
         // Set the vertex attributes.
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, materialProperty.vertexBufferId);

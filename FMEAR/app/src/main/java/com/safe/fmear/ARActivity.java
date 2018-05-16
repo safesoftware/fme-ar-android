@@ -279,6 +279,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             planeRenderer.createOnGlThread(/*context=*/ this, "models/trigrid.png");
             pointCloudRenderer.createOnGlThread(/*context=*/ this);
 
+            // TODO: uncomment this when re-introducing transparency (PR83631)
 //            objectRenderer.setBlendMode(ObjectRenderer.BlendMode.Grid);
             objectRenderer.createProgram(this);
 
