@@ -747,18 +747,16 @@ public class ObjectRenderer {
           GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, materialProperty.textureId);
           GLES20.glUniform1i(textureUniform, 0);
 
-          // Do not assume specular + shininess, obtain color only from texture
+          // Define object color from texture only, ignore ambient + diffuse
           GLES20.glUniform3f(materialAmbientUniform, 0f, 0f, 0f);
           GLES20.glUniform3f(materialDiffuseUniform, 0f, 0f, 0f);
-          GLES20.glUniform3f(materialSpecularUniform, 0f, 0f, 0f);
-          GLES20.glUniform1f(materialShininessUniform, 0f);
         } else {
-          // Set the object material properties.
+          // Define object color from material ambient + diffuse, since no texture
           GLES20.glUniform3f(materialAmbientUniform, materialProperty.ambient.getX(), materialProperty.ambient.getY(), materialProperty.ambient.getZ());
           GLES20.glUniform3f(materialDiffuseUniform, materialProperty.diffuse.getX(), materialProperty.diffuse.getY(), materialProperty.diffuse.getZ());
-          GLES20.glUniform3f(materialSpecularUniform, materialProperty.specular.getX(), materialProperty.specular.getY(), materialProperty.specular.getZ());
-          GLES20.glUniform1f(materialShininessUniform, materialProperty.shininess);
         }
+        GLES20.glUniform3f(materialSpecularUniform, materialProperty.specular.getX(), materialProperty.specular.getY(), materialProperty.specular.getZ());
+        GLES20.glUniform1f(materialShininessUniform, materialProperty.shininess);
 
         // Set the vertex attributes.
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, materialProperty.vertexBufferId);
