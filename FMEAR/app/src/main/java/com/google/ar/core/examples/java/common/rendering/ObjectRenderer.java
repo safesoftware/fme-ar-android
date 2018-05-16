@@ -66,7 +66,7 @@ public class ObjectRenderer {
     Grid
   }
 
-  public class Bounds {
+  private static class Bounds {
 
     public boolean isValid() {
       return initialized;
@@ -142,9 +142,9 @@ public class ObjectRenderer {
     public float maxZ = 0.0f;
   };
 
-  public class ObjProperty {
+  private static class ObjProperty {
 
-    class MaterialProperty
+    private static class MaterialProperty
     {
       public String materialName;
 
@@ -167,7 +167,7 @@ public class ObjectRenderer {
 
       // Arbitrarily chosen defaults for ambient, diffuse, and specular (no shininess)
       private FloatTuple ambient = FloatTuples.create(0.2f, 0.2f, 0.2f);
-      private FloatTuple diffuse = FloatTuples.create(1f, 1f, 1f);
+      private FloatTuple diffuse = FloatTuples.create(0.5f, 0.5f, 0.5f);
       private FloatTuple specular = FloatTuples.create(0f, 0f, 0f);
       // matches the default value in DefaultMtl.java
       private float shininess = 100f;
@@ -360,7 +360,7 @@ public class ObjectRenderer {
           }
 
           // Create a material property record in the obj property
-          ObjProperty.MaterialProperty materialProperty = objProperty.new MaterialProperty();
+          ObjProperty.MaterialProperty materialProperty = new ObjProperty.MaterialProperty();
           objProperty.materialProperties.add(materialProperty);
           materialProperty.materialName = materialName;
 
