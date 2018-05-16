@@ -53,11 +53,6 @@ void main() {
     vec3 viewFragmentDirection = normalize(v_ViewPosition);
     vec3 viewNormal = normalize(v_ViewNormal);
 
-    // Apply inverse SRGB gamma to the texture before making lighting calculations.
-    // Flip the y-texture coordinate to address the texture from top-left.
-    vec4 objectColor = texture2D(u_Texture, vec2(v_TexCoord.x, 1.0 - v_TexCoord.y));
-    objectColor.rgb = pow(objectColor.rgb, vec3(kInverseGamma));
-
     // Ambient light is unaffected by the light intensity.
     vec3 ambient = materialAmbient;
 
@@ -71,7 +66,15 @@ void main() {
     vec3 specular = materialSpecular *
             pow(specularStrength, materialSpecularPower);
 
-    vec3 color = objectColor.rgb * (ambient + diffuse) + specular;
+    // Apply inverse SRGB gamma to the texture before making lighting calculations.
+    // Flip the y-texture coordinate to address the texture from top-left.
+    vec4 objectColor = texture2D(u_Texture, vec2(v_TexCoord.x, 1.0 - v_TexCoord.y));
+
+    // In practice, we'll have color from either texture OR ambient + diffuse
+    objectColor.rgb = objectColor.rgb + (ambient + diffuse);
+    objectColor.rgb = pow(objectColor.rgb, vec3(kInverseGamma));
+
+    vec3 color = objectColor.rgb + specular;
     // Apply SRGB gamma before writing the fragment color.
     color.rgb = pow(color, vec3(kGamma));
     // Apply average pixel intensity and color shift
