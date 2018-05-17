@@ -1,16 +1,12 @@
 package com.safe.fmear;
 
-import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
-import android.opengl.Matrix;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.MenuInflater;
@@ -566,7 +562,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     private class UnzipTask extends AsyncTask<Intent, Integer, Boolean> {
 
         private ProgressBar progressBar;
+        private Exception exception;
 
+        @Override
         protected void onPreExecute() {
             progressBar = findViewById(R.id.progressbar);
             progressBar.setVisibility(View.VISIBLE);
@@ -574,12 +572,22 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
         @Override
         protected Boolean doInBackground(Intent... intents) {
-            return extractDatasetFromIntent(intents[0]);
+            try {
+                return extractDatasetFromIntent(intents[0]);
+            } catch (IOException e) {
+                exception = e;
+                return false;
+            }
         }
 
+        @Override
         protected void onPostExecute(Boolean result) {
             datasetDrawRequested = result;
-            Log.e(TAG, "Finished unzipping FMEAR file..");
+            if (exception == null) {
+                Log.e(TAG, "Finished unzipping FMEAR file..");
+            } else {
+                Toast.makeText(ARActivity.this, exception.getMessage(), Toast.LENGTH_LONG).show();
+            }
             progressBar.setVisibility(View.INVISIBLE);
         }
 
@@ -587,7 +595,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         // This function gets the data from the view intent. If the data exists, this function will
         // unzip the data, assuming it's a .fmear file, into the temp directory named "fmear" in the
         // default cache directory.
-        private boolean extractDatasetFromIntent(Intent resultData) {
+        private boolean extractDatasetFromIntent(Intent resultData) throws IOException {
             Intent intent;
             if (resultData != null) {
                 intent = resultData;
@@ -609,16 +617,13 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     try {
                         unzipContent(uri, tempDir);
                     } catch (IOException e) {
-                        Toast.makeText(ARActivity.this, "Failed to unpack selected file", Toast.LENGTH_LONG).show();
-                        e.printStackTrace();
-                        return false;
+                        throw new IOException("Failed to unpack selected file", e);
                     }
 
                     // Find all the .obj files
                     List<File> objFiles = new FileFinder(".obj").find(tempDir);
                     if (objFiles.size() == 0){
-                        Toast.makeText(ARActivity.this, "No renderable objects found", Toast.LENGTH_LONG).show();
-                        return false;
+                        throw new IOException("No renderable objects found");
                     }
                     for (File file : objFiles) {
                         Log.d("FME AR", "OBJ File: " + file.toString());
