@@ -16,9 +16,19 @@
 precision mediump float;
 
 uniform sampler2D u_Texture;
-
 uniform vec4 u_LightingParameters;
-uniform vec4 u_MaterialParameters;
+
+struct Material {
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
+};
+
+uniform Material u_MaterialParameters;
+uniform float u_MaterialOpacity;
+uniform vec4 u_ObjectColorCorrection; // used for texture-less objects
+
 uniform vec4 u_ColorCorrectionParameters;
 
 varying vec3 v_ViewPosition;
@@ -36,34 +46,37 @@ void main() {
     vec3 colorShift = u_ColorCorrectionParameters.rgb;
     float averagePixelIntensity = u_ColorCorrectionParameters.a;
 
-    float materialAmbient = u_MaterialParameters.x;
-    float materialDiffuse = u_MaterialParameters.y;
-    float materialSpecular = u_MaterialParameters.z;
-    float materialSpecularPower = u_MaterialParameters.w;
+    vec3 materialAmbient = u_MaterialParameters.ambient;
+    vec3 materialDiffuse = u_MaterialParameters.diffuse;
+    vec3 materialSpecular = u_MaterialParameters.specular;
+    float materialSpecularPower = u_MaterialParameters.shininess;
 
     // Normalize varying parameters, because they are linearly interpolated in the vertex shader.
     vec3 viewFragmentDirection = normalize(v_ViewPosition);
     vec3 viewNormal = normalize(v_ViewNormal);
 
-    // Apply inverse SRGB gamma to the texture before making lighting calculations.
-    // Flip the y-texture coordinate to address the texture from top-left.
-    vec4 objectColor = texture2D(u_Texture, vec2(v_TexCoord.x, 1.0 - v_TexCoord.y));
-    objectColor.rgb = pow(objectColor.rgb, vec3(kInverseGamma));
-
     // Ambient light is unaffected by the light intensity.
-    float ambient = materialAmbient;
+    vec3 ambient = materialAmbient;
 
     // Approximate a hemisphere light (not a harsh directional light).
-    float diffuse = materialDiffuse *
+    vec3 diffuse = materialDiffuse *
             0.5 * (dot(viewNormal, viewLightDirection) + 1.0);
 
     // Compute specular light.
     vec3 reflectedLightDirection = reflect(viewLightDirection, viewNormal);
     float specularStrength = max(0.0, dot(viewFragmentDirection, reflectedLightDirection));
-    float specular = materialSpecular *
+    vec3 specular = materialSpecular *
             pow(specularStrength, materialSpecularPower);
 
-    vec3 color = objectColor.rgb * (ambient + diffuse) + specular;
+    // Apply inverse SRGB gamma to the texture before making lighting calculations.
+    // Flip the y-texture coordinate to address the texture from top-left.
+    // if no texture, u_ObjectColorCorrection will be pure white(1,1,1), otherwise black(0,0,0)
+    vec4 objectColor = texture2D(u_Texture, vec2(v_TexCoord.x, 1.0 - v_TexCoord.y)) + u_ObjectColorCorrection;
+
+    objectColor.rgb = objectColor.rgb * (ambient + diffuse);
+    objectColor.rgb = pow(objectColor.rgb, vec3(kInverseGamma));
+
+    vec3 color = objectColor.rgb + specular;
     // Apply SRGB gamma before writing the fragment color.
     color.rgb = pow(color, vec3(kGamma));
     // Apply average pixel intensity and color shift
