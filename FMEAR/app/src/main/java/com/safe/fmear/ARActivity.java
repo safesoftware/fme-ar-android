@@ -585,7 +585,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             datasetDrawRequested = result;
             if (exception == null) {
                 if (runTask) {
-                    Toast.makeText(ARActivity.this, "Finished unzipping FMEAR file...", Toast.LENGTH_LONG).show();
+                    Toast.makeText(ARActivity.this, "Finished loading FMEAR file...", Toast.LENGTH_LONG).show();
                 }
                 Log.e(TAG, "Finished unzipping FMEAR file..");
             } else {
