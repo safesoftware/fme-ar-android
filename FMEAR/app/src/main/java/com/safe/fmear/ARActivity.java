@@ -91,6 +91,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     // If this boolean is set to true, onDrawFrame will try to load the obj files from the temp
     // directory.
     private boolean datasetDrawRequested = false;
+    private boolean runTask = false;
 
     private static final int READ_REQUEST_CODE = 1337;
 
@@ -583,11 +584,15 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         protected void onPostExecute(Boolean result) {
             datasetDrawRequested = result;
             if (exception == null) {
+                if (runTask) {
+                    Toast.makeText(ARActivity.this, "Finished loading FMEAR file...", Toast.LENGTH_LONG).show();
+                }
                 Log.e(TAG, "Finished unzipping FMEAR file..");
             } else {
                 Toast.makeText(ARActivity.this, exception.getMessage(), Toast.LENGTH_LONG).show();
             }
             progressBar.setVisibility(View.INVISIBLE);
+            runTask = true;
         }
 
         // -----------------------------------------------------------------------------------------
