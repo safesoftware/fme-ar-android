@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import de.javagl.obj.FloatTuple;
 import de.javagl.obj.FloatTuples;
@@ -346,7 +347,13 @@ public class ObjectRenderer {
         // 2. Make sure that texture coordinates are not ambiguous
         // 3. Make sure that normals are not ambiguous
         // 4. Convert it to single-indexed data
-        objObject = ObjUtils.convertToRenderable(objObject);
+        Obj obj = ObjUtils.triangulate(objObject);
+        if (obj.getNumNormals() <= 0) {
+          obj = createNewObjWithNormals(obj);
+        }
+        obj = ObjUtils.makeTexCoordsUnique(obj);
+        obj = ObjUtils.makeNormalsUnique(obj);
+        objObject = ObjUtils.makeVertexIndexed(obj, Objs.create());
 
         // For every obj file, store the properties for later use
         ObjProperty objProperty = new ObjProperty();
@@ -368,10 +375,6 @@ public class ObjectRenderer {
           // Get the material name from the key and the obj object from the value
           String materialName = entry.getKey();
           Obj currObj = entry.getValue();
-
-          if (currObj.getNumNormals() <= 0) {
-            currObj = createNewObjWithNormals(currObj);
-          }
 
           // Create a material property record in the obj property
           ObjProperty.MaterialProperty materialProperty = new ObjProperty.MaterialProperty();
@@ -568,7 +571,9 @@ public class ObjectRenderer {
       output.addNormal(toFloatTuple(normal));
     }
     // copy and inject normals to face
-    for (ObjFace face : faceToNormalIndexMap.keySet()) {
+    for (int h = 0; h < obj.getNumFaces(); h++) {
+      ObjFace face = obj.getFace(h);
+      activateGroups(obj, face, output);
       int numVertices = face.getNumVertices();
       // get vertices
       int[] v = new int[numVertices]; // triangles only!
@@ -577,8 +582,9 @@ public class ObjectRenderer {
       }
 
       // get texture coords
-      int[] vt = new int[numVertices];
+      int[] vt = null;
       if (face.containsTexCoordIndices()) {
+        vt = new int[numVertices];
         for (int i = 0; i < numVertices; i++) {
           vt[i] = face.getTexCoordIndex(i);
         }
@@ -593,6 +599,21 @@ public class ObjectRenderer {
       output.addFace(ObjFaces.create(v, vt, vn));
     }
     return output;
+  }
+
+  private void activateGroups(Obj input, ObjFace face, Obj output) {
+    Set<String> activatedGroupNames =
+            input.getActivatedGroupNames(face);
+    if (activatedGroupNames != null) {
+      output.setActiveGroupNames(
+              activatedGroupNames);
+    }
+    String activatedMaterialGroupName =
+            input.getActivatedMaterialGroupName(face);
+    if (activatedMaterialGroupName != null) {
+      output.setActiveMaterialGroupName(
+              activatedMaterialGroupName);
+    }
   }
 
   private static FloatTuple toFloatTuple(float[] vector3) {
@@ -730,11 +751,7 @@ public class ObjectRenderer {
    *
    * @param cameraView A 4x4 view matrix, in column-major order.
    * @param cameraPerspective A 4x4 projection matrix, in column-major order.
-   * @param lightIntensity Illumination intensity. Combined with diffuse and specular material
-   *     properties.
    * @see #setBlendMode(BlendMode)
-   * @see #updateModelMatrix(float[], float)
-   * @see #setMaterialProperties(Mtl)
    * @see android.opengl.Matrix
    */
   public void draw(float[] cameraView, float[] cameraPerspective, float[] colorCorrectionRgba) {
