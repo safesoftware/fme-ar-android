@@ -71,8 +71,13 @@ public class ObjSplitting
      * <code>usemtl</code> directive), then the resulting map will
      * be empty. <br>
      * <br>
-     * Faces that are not associated with any material group 
-     * will not be contained in the output.
+     *
+     * + SAFE SOFTWARE INC.
+     * + The ObjReader.readImpl has been modified to associate any faces without
+     * + a material group name with the material name "fme_ar_default".
+     * - Faces that are not associated with any material group
+     * - will not be contained in the output.
+     *
      * 
      * @param obj The input {@link ReadableObj}
      * @return The mapping from material group names (corresponding to the

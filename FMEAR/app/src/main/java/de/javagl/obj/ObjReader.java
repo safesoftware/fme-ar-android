@@ -128,6 +128,14 @@ public class ObjReader
         BufferedReader reader, T output)
         throws IOException
     {
+        // ---------------------------------------------------------------
+        // SAFE SOFTWARE INC.
+        // Set a default active material group name so that all the faces
+        // without a material group name can still be retrieved by
+        // ObjSplitting.splitByMaterialGroups
+        output.setActiveMaterialGroupName("fme_ar_default");
+        // ---------------------------------------------------------------
+
         ObjFaceParser objFaceParser = new ObjFaceParser();
 
         int vertexCounter = 0;
