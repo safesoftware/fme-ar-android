@@ -427,15 +427,6 @@ public class ObjectRenderer {
           materialProperty.bounds = calculateBounds(vertices);
           objProperty.bounds.expandBy(materialProperty.bounds);
 
-          // Convert int indices to shorts for GL ES 2.0 compatibility
-          ShortBuffer indices = ByteBuffer.allocateDirect(2 * wideIndices.limit())
-            .order(ByteOrder.nativeOrder())
-            .asShortBuffer();
-          while (wideIndices.hasRemaining()) {
-            indices.put((short) wideIndices.get());
-          }
-          indices.rewind();
-
           int[] buffers = new int[2];
           GLES20.glGenBuffers(2, buffers, 0);
           materialProperty.vertexBufferId = buffers[0];
@@ -468,11 +459,11 @@ public class ObjectRenderer {
           GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
 
           // Load index buffer
-          materialProperty.indexCount = indices.limit();
+          materialProperty.indexCount = wideIndices.limit();
           if (materialProperty.indexCount > 0) {
             GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, materialProperty.indexBufferId);
             GLES20.glBufferData(
-                    GLES20.GL_ELEMENT_ARRAY_BUFFER, 2 * materialProperty.indexCount, indices, GLES20.GL_STATIC_DRAW);
+                    GLES20.GL_ELEMENT_ARRAY_BUFFER, 4 * materialProperty.indexCount, wideIndices, GLES20.GL_STATIC_DRAW);
             GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
           }
 
@@ -857,7 +848,7 @@ public class ObjectRenderer {
 
         if (materialProperty.indexCount > 0) {
           GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, materialProperty.indexBufferId);
-          GLES20.glDrawElements(GLES20.GL_TRIANGLES, materialProperty.indexCount, GLES20.GL_UNSIGNED_SHORT, 0);
+          GLES20.glDrawElements(GLES20.GL_TRIANGLES, materialProperty.indexCount, GLES20.GL_UNSIGNED_INT, 0);
           GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
         }
 
