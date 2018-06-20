@@ -21,7 +21,6 @@ import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLUtils;
 import android.opengl.Matrix;
-import android.util.Log;
 
 import com.safe.fmear.FileFinder;
 
@@ -470,7 +469,6 @@ public class ObjectRenderer {
 
           ShaderUtil.checkGLError(TAG, "OBJ buffer load");
         }
-
 
         datasetBounds.expandBy(objProperty.bounds);
       }
