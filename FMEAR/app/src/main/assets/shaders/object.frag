@@ -23,10 +23,10 @@ struct Material {
     vec3 diffuse;
     vec3 specular;
     float shininess;
+    float opacity;
 };
 
 uniform Material u_MaterialParameters;
-uniform float u_MaterialOpacity;
 uniform vec4 u_ObjectColorCorrection; // used for texture-less objects
 
 uniform vec4 u_ColorCorrectionParameters;
@@ -50,6 +50,7 @@ void main() {
     vec3 materialDiffuse = u_MaterialParameters.diffuse;
     vec3 materialSpecular = u_MaterialParameters.specular;
     float materialSpecularPower = u_MaterialParameters.shininess;
+    float materialOpacity = u_MaterialParameters.opacity;
 
     // Normalize varying parameters, because they are linearly interpolated in the vertex shader.
     vec3 viewFragmentDirection = normalize(v_ViewPosition);
@@ -72,6 +73,7 @@ void main() {
     // Flip the y-texture coordinate to address the texture from top-left.
     // if no texture, u_ObjectColorCorrection will be pure white(1,1,1), otherwise black(0,0,0)
     vec4 objectColor = texture2D(u_Texture, vec2(v_TexCoord.x, 1.0 - v_TexCoord.y)) + u_ObjectColorCorrection;
+    objectColor.a *= materialOpacity;
 
     objectColor.rgb = objectColor.rgb * (ambient + diffuse);
     objectColor.rgb = pow(objectColor.rgb, vec3(kInverseGamma));

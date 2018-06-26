@@ -64,18 +64,6 @@ public class ObjectRenderer {
 
   private static final String TAG = ObjectRenderer.class.getSimpleName();
 
-  /**
-   * Blend mode.
-   *
-   * @see #setBlendMode(BlendMode)
-   */
-  public enum BlendMode {
-    /** Multiplies the destination color by the source alpha. */
-    Shadow,
-    /** Normal alpha blending. */
-    Grid
-  }
-
   private static class Bounds {
 
     public boolean isValid() {
@@ -229,8 +217,6 @@ public class ObjectRenderer {
   // Shader location: color correction property
   private int colorCorrectionParameterUniform;
 
-  private BlendMode blendMode = null;
-
   // Temporary matrices allocated here to reduce number of allocations for each frame.
   private final float[] modelMatrix = new float[16];
   private final float[] modelViewMatrix = new float[16];
@@ -278,7 +264,7 @@ public class ObjectRenderer {
     materialDiffuseUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters.diffuse");
     materialSpecularUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters.specular");
     materialShininessUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters.shininess");
-    materialOpacityUniform = GLES20.glGetUniformLocation(program, "u_MaterialOpacity");
+    materialOpacityUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters.opacity");
 
     colorCorrectionParameterUniform =
             GLES20.glGetUniformLocation(program, "u_ColorCorrectionParameters");
@@ -685,16 +671,6 @@ public class ObjectRenderer {
   }
 
   /**
-   * Selects the blending mode for rendering.
-   *
-   * @param blendMode The blending mode. Null indicates no blending (opaque rendering).
-   */
-  public void setBlendMode(BlendMode blendMode) {
-    this.blendMode = blendMode;
-    // TODO: remove this if not needed. this was used to blend shadows
-  }
-
-  /**
    * Updates the object model matrix and applies scaling.
    *
    * @param modelMatrix A 4x4 model-to-world transformation matrix, stored in column-major order.
@@ -742,16 +718,16 @@ public class ObjectRenderer {
    *
    * @param cameraView A 4x4 view matrix, in column-major order.
    * @param cameraPerspective A 4x4 projection matrix, in column-major order.
+   * @param drawOpaque When this is true, this function draws the material groups with opacity = 1
+   * @param drawTransparent When this is true, this function draws the mamterial groups with opacity < 1
    * @see #setBlendMode(BlendMode)
    * @see android.opengl.Matrix
    */
-  public void draw(float[] cameraView, float[] cameraPerspective, float[] colorCorrectionRgba) {
+  public void draw(float[] cameraView, float[] cameraPerspective, float[] colorCorrectionRgba, boolean drawOpaque, boolean drawTransparent) {
 
     if (!initialized) {
       return;
     }
-
-    ShaderUtil.checkGLError(TAG, "Before draw");
 
     // Build the ModelView and ModelViewProjection matrices
     // for calculating object position and light.
@@ -777,9 +753,14 @@ public class ObjectRenderer {
         colorCorrectionRgba[2],
         colorCorrectionRgba[3]);
 
-
     for (ObjProperty objProperty : objProperties) {
       for (ObjProperty.MaterialProperty materialProperty : objProperty.materialProperties) {
+
+        if (!(drawOpaque && materialProperty.opacity == 1.0) && !(drawTransparent && materialProperty.opacity < 1.0))
+        {
+          // Skip this material
+          continue;
+        }
 
         if (materialProperty.hasTexture) {
           // Attach the object texture.
@@ -831,19 +812,9 @@ public class ObjectRenderer {
           GLES20.glEnableVertexAttribArray(texCoordAttribute);
         }
 
-        if (blendMode != null) {
-          GLES20.glDepthMask(false);
+        if (drawTransparent) {
           GLES20.glEnable(GLES20.GL_BLEND);
-          switch (blendMode) {
-            case Shadow:
-              // Multiplicative blending function for Shadow.
-              GLES20.glBlendFunc(GLES20.GL_ZERO, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-              break;
-            case Grid:
-              // Grid, additive blending function.
-              GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-              break;
-          }
+          GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
         }
 
         if (materialProperty.indexCount > 0) {
@@ -852,9 +823,9 @@ public class ObjectRenderer {
           GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
         }
 
-        if (blendMode != null) {
+        if (drawTransparent)
+        {
           GLES20.glDisable(GLES20.GL_BLEND);
-          GLES20.glDepthMask(true);
         }
 
         // Disable vertex arrays

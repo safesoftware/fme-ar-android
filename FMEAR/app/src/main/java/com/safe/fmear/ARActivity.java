@@ -300,6 +300,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         // Clear screen to notify driver it should not load any pixels from previous frame.
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
 
+        // Enable depth test for blending
+        GLES20.glDepthMask(true);
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+
         if (session == null) {
             return;
         }
@@ -413,7 +417,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 objectRenderer.updateModelMatrix(anchorMatrix, mScaleFactor, mRotateAngle);
 
                 // Draw the model
-                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba);
+                // Draw Opaque first and then transparent objects
+                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, true, false);
+                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, false, true);
             }
 
         } catch (Throwable t) {
