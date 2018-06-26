@@ -81,6 +81,18 @@ void main() {
     color.rgb = pow(color, vec3(kGamma));
     // Apply average pixel intensity and color shift
     color *= colorShift * (averagePixelIntensity / kMiddleGrayGamma);
+
+    // If the pixel in the texture is nearly transparent, we can simply discard the pixel
+    // REFERENCE: https://www.opengl.org/sdk/docs/tutorials/ClockworkCoders/discard.php
+    // REFERENCE: https://learnopengl.com/Advanced-OpenGL/Blending
+    if (objectColor.a >= 0.1)
+    {
+        gl_FragColor.a = objectColor.a;
+    }
+    else
+    {
+        discard;
+    }
+
     gl_FragColor.rgb = color;
-    gl_FragColor.a = objectColor.a;
 }
