@@ -683,7 +683,7 @@ public class ObjectRenderer {
    * @param scaleFactor A separate scaling factor to apply before the {@code modelMatrix}.
    * @see android.opengl.Matrix
    */
-  public void updateModelMatrix(float[] modelMatrix, float scaleFactor, float rotateFactor) {
+  public void updateModelMatrix(float[] modelMatrix, float[] translateFactor, float scaleFactor, float rotateFactor) {
 
     if (!initialized) {
       return;
@@ -699,6 +699,9 @@ public class ObjectRenderer {
 
       // Rotate the model -90 degrees around the original x-axis
       Matrix.rotateM(orientationMatrix, 0, -90, 1, 0, 0);
+
+      // Translate the model by the offset amount from the anchor
+      Matrix.translateM(orientationMatrix, 0, translateFactor[0], translateFactor[1], translateFactor[2]);
 
       // Rotate the model based on the rotateFactor around the original z-axis
       Matrix.rotateM(orientationMatrix, 0, -rotateFactor, 0, 0, 1);

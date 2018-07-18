@@ -17,7 +17,6 @@ import android.view.View;
 import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.Toast;
-
 import com.almeros.android.multitouch.RotateGestureDetector;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.ArCoreApk;
@@ -25,7 +24,6 @@ import com.google.ar.core.Camera;
 import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
-import com.google.ar.core.Point;
 import com.google.ar.core.PointCloud;
 import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
@@ -95,6 +93,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     private boolean runTask = false;
 
     private static final int READ_REQUEST_CODE = 1337;
+
+    // One finger scroll gesture detecting
+    private final float kTranslationMultiplier = 0.001f;
+    private float[] mTranslateFactor = new float[3];
 
     // Two finger scale gesture detecting
     private ScaleListener mScaleListener;
@@ -326,22 +328,37 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
             MotionEvent tap = tapHelper.poll();
             if (tap != null && camera.getTrackingState() == TrackingState.TRACKING) {
-                // Clears previous anchors; new anchor with each tap.
-                anchors.clear();
+
+                // Replace the anchor when there is a new one. If there is no new one, keep
+                // the existing one so that we can still render the model at the anchor
+                boolean needToReplaceAnchors = true;
 
                 for (HitResult hit : frame.hitTest(tap)) {
+
                     // Check if any plane was hit, and if it was hit inside the plane polygon
                     Trackable trackable = hit.getTrackable();
                     // Creates an anchor if a plane or an oriented point was hit.
-                    if ((trackable instanceof Plane && ((Plane) trackable).isPoseInPolygon(hit.getHitPose()))
-                            || (trackable instanceof Point
-                            && ((Point) trackable).getOrientationMode()
-                            == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL)) {
+                    if ((trackable instanceof Plane && ((Plane) trackable).isPoseInPolygon(hit.getHitPose())))
+
+                        // Don't allow the point case since the object orientation is inconsistent with the object on a plane
+                        // || (trackable instanceof Point
+                        // && ((Point) trackable).getOrientationMode()
+                        // == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL))
+                    {
                         // Adding an Anchor tells ARCore that it should track this position in
                         // space. This anchor is created on the Plane to place the 3D model
                         // in the correct position relative both to the world and to the plane.
 
+                        if (needToReplaceAnchors) {
+                            anchors.clear();
+                            needToReplaceAnchors = false;
+                        }
+
                         anchors.add(hit.createAnchor());
+
+                        // reset translate factor since we use a new anchor
+                        mTranslateFactor[0] = mTranslateFactor[1] = mTranslateFactor[2] = 0.0f;
+
                         break;
                     }
                 }
@@ -395,6 +412,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
             // Visualize anchors created by touch.
             for (Anchor anchor : anchors) {
+
+                //Log.d("ANCHOR", anchor.hashCode() + ": POSE = " + anchor.getPose().toString());
+
                 if (anchor.getTrackingState() != TrackingState.TRACKING) {
                     continue;
                 }
@@ -414,8 +434,15 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     }
                 }
 
+                // Calculate move delta
+                float deltaX = tapHelper.distanceX();
+                float deltaZ = tapHelper.distanceY();
+
+                mTranslateFactor[0] = mTranslateFactor[0] + (deltaX * kTranslationMultiplier);
+                mTranslateFactor[1] = mTranslateFactor[1] - (deltaZ * kTranslationMultiplier);
+
                 // Update the model matrix
-                objectRenderer.updateModelMatrix(anchorMatrix, mScaleFactor, mRotateAngle);
+                objectRenderer.updateModelMatrix(anchorMatrix, mTranslateFactor, mScaleFactor, mRotateAngle);
 
                 // Draw the model
                 // Draw Opaque first and then transparent objects
@@ -431,6 +458,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
+
         mScaleDetector.onTouchEvent(ev);
         // Get scale factor for scaling object
         mScaleFactor = mScaleListener.getmScaleFactor();
@@ -524,6 +552,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
         mRotateAngle = 0.0f;
         mRotateListener.setmRotationDegrees(0.0f);
+
+        mTranslateFactor[0] = mTranslateFactor[1] = mTranslateFactor[2] = 0.0f;
     }
 
     // ---------------------------------------------------------------------------------------------
