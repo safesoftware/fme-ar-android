@@ -307,6 +307,10 @@ public class ObjectRenderer {
     return bounds;
   }
 
+  public void reset() {
+    initialized = false;
+  }
+
   public void loadObjFiles(Context context, List<File> files)
           throws IOException {
 

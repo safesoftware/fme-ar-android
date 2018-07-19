@@ -424,6 +424,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
                 // Load the new obj files if any
                 if (datasetDrawRequested) {
+
                     datasetDrawRequested = false;
                     try {
                         List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
@@ -492,6 +493,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 uri = resultData.getData();
                 resultData.setAction(Intent.ACTION_OPEN_DOCUMENT);
                 Log.i(TAG, "Uri: " + uri.toString());
+
+                // Reset all transformation and model before taking time to load another model
+                reload();
+                objectRenderer.reset();
 
                 // Call anon AsyncTask to unzip files in background
                 new UnzipTask().execute(resultData);
