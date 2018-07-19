@@ -21,7 +21,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".ARActivity">
+        <activity android:name=".ARActivity" android:screenOrientation="locked">
 
             <!-- TODO: For development purpose, the ARActivity screen is being used as the
                  launcher. If we have a separate launcher activity in the future, we should
