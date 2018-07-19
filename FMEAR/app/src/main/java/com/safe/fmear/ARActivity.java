@@ -435,11 +435,16 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 }
 
                 // Calculate move delta
-                float deltaX = tapHelper.distanceX();
-                float deltaZ = tapHelper.distanceY();
+                float scrollDeltaX = tapHelper.scrollDeltaX();
+                float scrollDeltaY = tapHelper.scrollDeltaY();
 
-                mTranslateFactor[0] = mTranslateFactor[0] + (deltaX * kTranslationMultiplier);
-                mTranslateFactor[1] = mTranslateFactor[1] - (deltaZ * kTranslationMultiplier);
+                // clear the delta
+                tapHelper.resetScrollDelta();
+
+                if (scrollDeltaX != 0.f || scrollDeltaY != 0.f) {
+                    mTranslateFactor[0] = mTranslateFactor[0] + (scrollDeltaX * kTranslationMultiplier);
+                    mTranslateFactor[1] = mTranslateFactor[1] - (scrollDeltaY * kTranslationMultiplier);
+                }
 
                 // Update the model matrix
                 objectRenderer.updateModelMatrix(anchorMatrix, mTranslateFactor, mScaleFactor, mRotateAngle);

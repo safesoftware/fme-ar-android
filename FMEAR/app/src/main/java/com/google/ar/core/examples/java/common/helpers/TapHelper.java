@@ -62,8 +62,8 @@ public final class TapHelper implements OnTouchListener {
                 queuedSingleTaps.clear();
 
                 // Reset scroll variables
-                mScrollStartX = 0.f;
-                mScrollStartY = 0.f;
+                mScrollStartX = e.getX();
+                mScrollStartY = e.getY();
                 mScrollDeltaX = 0.f;
                 mScrollDeltaY = 0.f;
 
@@ -79,12 +79,16 @@ public final class TapHelper implements OnTouchListener {
                   // use the delta values to calculate the offset from the existing anchor point.
                   //queuedSingleTaps.offer(e2);
 
+                  mScrollDeltaX = 0.f;
+                  mScrollDeltaY = 0.f;
+
                   // Accumulate all the historical scroll delta values since the last onScroll.
                   final int historySize = e2.getHistorySize();
                   for (int h = 0; h < historySize; h++) {
                     // historical point
                     float hx = e2.getHistoricalX(0, h);
                     float hy = e2.getHistoricalY(0, h);
+
                     // distance between startX,startY and historical point
                     float dx = (hx - mScrollStartX);
                     float dy = (hy - mScrollStartY);
@@ -92,8 +96,8 @@ public final class TapHelper implements OnTouchListener {
                     // make historical point the start point for next loop iteration
                     mScrollStartX = hx;
                     mScrollStartY = hy;
-                    mScrollDeltaX = dx;
-                    mScrollDeltaY = dy;
+                    mScrollDeltaX += dx;
+                    mScrollDeltaY += dy;
                   }
 
                   return true;
@@ -115,16 +119,16 @@ public final class TapHelper implements OnTouchListener {
     return queuedSingleTaps.poll();
   }
 
-  public float distanceX() {
-    float x = mScrollDeltaX;
-    mScrollDeltaX = 0;
-    return x;
+  public float scrollDeltaX() {
+    return mScrollDeltaX;
   }
 
-  public float distanceY() {
-    float y = mScrollDeltaY;
-    mScrollDeltaY = 0;
-    return y;
+  public float scrollDeltaY() {
+    return mScrollDeltaY;
+  }
+
+  public void resetScrollDelta() {
+    mScrollDeltaX = mScrollDeltaY = 0.f;
   }
 
 
