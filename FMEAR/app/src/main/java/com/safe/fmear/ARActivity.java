@@ -54,6 +54,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -300,6 +301,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         // Clear screen to notify driver it should not load any pixels from previous frame.
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
 
+        // Enable depth test for blending
+        GLES20.glDepthMask(true);
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+
         if (session == null) {
             return;
         }
@@ -413,7 +418,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 objectRenderer.updateModelMatrix(anchorMatrix, mScaleFactor, mRotateAngle);
 
                 // Draw the model
-                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba);
+                // Draw Opaque first and then transparent objects
+                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, EnumSet.of(ObjectRenderer.RenderingOptions.DRAW_OPAQUE));
+                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, EnumSet.of(ObjectRenderer.RenderingOptions.DRAW_TRANSPARENT));
             }
 
         } catch (Throwable t) {
