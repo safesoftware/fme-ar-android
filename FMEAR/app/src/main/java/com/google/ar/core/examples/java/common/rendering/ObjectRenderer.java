@@ -33,6 +33,7 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +54,11 @@ import de.javagl.obj.Objs;
 
 /** Renders an object loaded from an OBJ file in OpenGL. */
 public class ObjectRenderer {
+
+  public enum RenderingOptions {
+    DRAW_OPAQUE,
+    DRAW_TRANSPARENT
+  }
 
   private static FloatTuple createDefaultDiffuse() {
     return FloatTuples.create(0.5f, 0.5f, 0.5f);
@@ -723,7 +729,7 @@ public class ObjectRenderer {
    * @see #setBlendMode(BlendMode)
    * @see android.opengl.Matrix
    */
-  public void draw(float[] cameraView, float[] cameraPerspective, float[] colorCorrectionRgba, boolean drawOpaque, boolean drawTransparent) {
+  public void draw(float[] cameraView, float[] cameraPerspective, float[] colorCorrectionRgba, EnumSet<RenderingOptions> options) {
 
     if (!initialized) {
       return;
@@ -756,7 +762,8 @@ public class ObjectRenderer {
     for (ObjProperty objProperty : objProperties) {
       for (ObjProperty.MaterialProperty materialProperty : objProperty.materialProperties) {
 
-        if (!(drawOpaque && materialProperty.opacity == 1.0) && !(drawTransparent && materialProperty.opacity < 1.0))
+        if (!(options.contains(RenderingOptions.DRAW_OPAQUE) && materialProperty.opacity == 1.0) &&
+            !(options.contains(RenderingOptions.DRAW_TRANSPARENT) && materialProperty.opacity < 1.0))
         {
           // Skip this material
           continue;
@@ -812,7 +819,7 @@ public class ObjectRenderer {
           GLES20.glEnableVertexAttribArray(texCoordAttribute);
         }
 
-        if (drawTransparent) {
+        if (options.contains(RenderingOptions.DRAW_TRANSPARENT)) {
           GLES20.glEnable(GLES20.GL_BLEND);
           GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
         }
@@ -823,7 +830,7 @@ public class ObjectRenderer {
           GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
         }
 
-        if (drawTransparent)
+        if (options.contains(RenderingOptions.DRAW_TRANSPARENT))
         {
           GLES20.glDisable(GLES20.GL_BLEND);
         }

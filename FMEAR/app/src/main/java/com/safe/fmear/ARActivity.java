@@ -54,6 +54,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -418,8 +419,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
                 // Draw the model
                 // Draw Opaque first and then transparent objects
-                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, true, false);
-                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, false, true);
+                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, EnumSet.of(ObjectRenderer.RenderingOptions.DRAW_OPAQUE));
+                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, EnumSet.of(ObjectRenderer.RenderingOptions.DRAW_TRANSPARENT));
             }
 
         } catch (Throwable t) {
