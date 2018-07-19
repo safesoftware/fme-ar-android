@@ -724,8 +724,7 @@ public class ObjectRenderer {
    *
    * @param cameraView A 4x4 view matrix, in column-major order.
    * @param cameraPerspective A 4x4 projection matrix, in column-major order.
-   * @param drawOpaque When this is true, this function draws the material groups with opacity = 1
-   * @param drawTransparent When this is true, this function draws the material groups with opacity < 1
+   * @param options A set of rendering options for the draw call.
    * @see #setBlendMode(BlendMode)
    * @see android.opengl.Matrix
    */
