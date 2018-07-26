@@ -15,6 +15,7 @@
 package com.google.ar.core.examples.java.common.helpers;
 
 import android.content.Context;
+import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
@@ -29,6 +30,12 @@ import java.util.concurrent.BlockingQueue;
 public final class TapHelper implements OnTouchListener {
   private final GestureDetector gestureDetector;
   private final BlockingQueue<MotionEvent> queuedSingleTaps = new ArrayBlockingQueue<>(16);
+
+  // Scroll motion detection
+  private float mScrollStartX = 0.f;
+  private float mScrollStartY = 0.f;
+  private float mScrollDeltaX = 0.f;
+  private float mScrollDeltaY = 0.f;
 
   /**
    * Creates the tap helper.
@@ -49,17 +56,57 @@ public final class TapHelper implements OnTouchListener {
 
               @Override
               public boolean onDown(MotionEvent e) {
+
+                // A new down motion indicates that it's a new beginning. We should clear all
+                // previous taps.
+                queuedSingleTaps.clear();
+
+                // Reset scroll variables
+                mScrollStartX = e.getX();
+                mScrollStartY = e.getY();
+                mScrollDeltaX = 0.f;
+                mScrollDeltaY = 0.f;
+
                 return true;
               }
 
               @Override
               public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
                 if (e1.getPointerCount() < 2 && e2.getPointerCount() < 2) {
-                  queuedSingleTaps.offer(e2);
-                    return true;
-                  } else
-                    return false;
+
+                  // Don't insert a new motion event to the queue since we don't want to create a
+                  // new anchor for every scroll action. Instead, we record the scroll delta and
+                  // use the delta values to calculate the offset from the existing anchor point.
+                  //queuedSingleTaps.offer(e2);
+
+                  mScrollDeltaX = 0.f;
+                  mScrollDeltaY = 0.f;
+
+                  // Accumulate all the historical scroll delta values since the last onScroll.
+                  final int historySize = e2.getHistorySize();
+                  for (int h = 0; h < historySize; h++) {
+                    // historical point
+                    float hx = e2.getHistoricalX(0, h);
+                    float hy = e2.getHistoricalY(0, h);
+
+                    // distance between startX,startY and historical point
+                    float dx = (hx - mScrollStartX);
+                    float dy = (hy - mScrollStartY);
+
+                    // make historical point the start point for next loop iteration
+                    mScrollStartX = hx;
+                    mScrollStartY = hy;
+                    mScrollDeltaX += dx;
+                    mScrollDeltaY += dy;
+                  }
+
+                  return true;
+                } else {
+                  // Any multi-touch should clear the taps.
+                  queuedSingleTaps.clear();
+                  return false;
                 }
+              }
             });
   }
 
@@ -72,8 +119,21 @@ public final class TapHelper implements OnTouchListener {
     return queuedSingleTaps.poll();
   }
 
+  public float scrollDeltaX() {
+    return mScrollDeltaX;
+  }
+
+  public float scrollDeltaY() {
+    return mScrollDeltaY;
+  }
+
+  public void resetScrollDelta() {
+    mScrollDeltaX = mScrollDeltaY = 0.f;
+  }
+
+
   @Override
   public boolean onTouch(View view, MotionEvent motionEvent) {
-    return gestureDetector.onTouchEvent(motionEvent);
+      return gestureDetector.onTouchEvent(motionEvent);
   }
 }

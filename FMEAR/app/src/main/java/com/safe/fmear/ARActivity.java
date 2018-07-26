@@ -19,7 +19,6 @@ import android.view.View;
 import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.Toast;
-
 import com.almeros.android.multitouch.RotateGestureDetector;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.ArCoreApk;
@@ -339,6 +338,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 boolean needToReplaceAnchors = true;
 
                 for (HitResult hit : frame.hitTest(tap)) {
+
                     // Check if any plane was hit, and if it was hit inside the plane polygon
                     Trackable trackable = hit.getTrackable();
                     // Creates an anchor if a plane or an oriented point was hit.
@@ -359,8 +359,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                         }
 
                         anchors.add(hit.createAnchor());
-
-                        Log.e("TAP ANCHOR", "ANCHOR ADDED");
 
                         // reset translate factor since we use a new anchor
                         mTranslateFactor[0] = mTranslateFactor[1] = mTranslateFactor[2] = 0.0f;
@@ -452,17 +450,17 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
                 if (objectRenderer.isInitialized()) {
 
-//                    // Calculate move delta
-//                    float scrollDeltaX = tapHelper.scrollDeltaX();
-//                    float scrollDeltaY = tapHelper.scrollDeltaY();
-//
-//                    // clear the delta
-//                    tapHelper.resetScrollDelta();
-//
-//                    if (scrollDeltaX != 0.f || scrollDeltaY != 0.f) {
-//                        mTranslateFactor[0] = mTranslateFactor[0] + (scrollDeltaX * kTranslationMultiplier);
-//                        mTranslateFactor[1] = mTranslateFactor[1] - (scrollDeltaY * kTranslationMultiplier);
-//                    }
+                    // Calculate move delta
+                    float scrollDeltaX = tapHelper.scrollDeltaX();
+                    float scrollDeltaY = tapHelper.scrollDeltaY();
+
+                    // clear the delta
+                    tapHelper.resetScrollDelta();
+
+                    if (scrollDeltaX != 0.f || scrollDeltaY != 0.f) {
+                        mTranslateFactor[0] = mTranslateFactor[0] + (scrollDeltaX * kTranslationMultiplier);
+                        mTranslateFactor[1] = mTranslateFactor[1] - (scrollDeltaY * kTranslationMultiplier);
+                    }
 
                     // Update the model matrix
                     objectRenderer.updateModelMatrix(anchorMatrix, mTranslateFactor, mScaleFactor, mRotateAngle);
@@ -513,6 +511,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
+
         mScaleDetector.onTouchEvent(ev);
         // Get scale factor for scaling object
         mScaleFactor = mScaleListener.getmScaleFactor();
