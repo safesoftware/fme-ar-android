@@ -2,11 +2,13 @@ package com.safe.fmear;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.provider.OpenableColumns;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.MenuInflater;
@@ -17,7 +19,6 @@ import android.view.View;
 import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.Toast;
-
 import com.almeros.android.multitouch.RotateGestureDetector;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.ArCoreApk;
@@ -25,7 +26,6 @@ import com.google.ar.core.Camera;
 import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
-import com.google.ar.core.Point;
 import com.google.ar.core.PointCloud;
 import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
@@ -91,10 +91,14 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     // If this boolean is set to true, onDrawFrame will try to load the obj files from the temp
     // directory.
-    private boolean datasetDrawRequested = false;
-    private boolean runTask = false;
+    private boolean fileUnzippedSuccessfully = false;
+    private boolean objFilesLoadRequested = false;
 
     private static final int READ_REQUEST_CODE = 1337;
+
+    // One finger scroll gesture detecting
+    private final float kTranslationMultiplier = 0.001f;
+    private float[] mTranslateFactor = new float[3];
 
     // Two finger scale gesture detecting
     private ScaleListener mScaleListener;
@@ -105,6 +109,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     private RotationListener mRotateListener;
     private RotateGestureDetector mRotateDetector;
     private float mRotateAngle;
+
+    // Toast
+    private Toast currentToast;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -146,11 +153,11 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         // handle both cases.
         // Get the data from the intent and unzip the FME AR dataset into the temp directory.
         // If we successfully extracted the content from a .fmear file, we will set the boolean
-        // datasetDrawRequested to true. Then, in onDrawFrame, we load the obj and update the
+        // fileUnzippedSuccessfully to true. Then, in onDrawFrame, we load the obj and update the
         // geometry.
 
-        // Pass null to unzipping AsyncTask to set datasetDrawRequested.
-        if (!datasetDrawRequested) {
+        // Pass null to unzipping AsyncTask to set fileUnzippedSuccessfully.
+        if (!fileUnzippedSuccessfully) {
             new UnzipTask().execute((Intent) null);
         }
 
@@ -243,7 +250,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         switch (requestCode) {
             case StoragePermissionHelper.STORAGE_PERMISSION_CODE:
                 if (!StoragePermissionHelper.hasPermission(this)) {
-                    Toast.makeText(this, R.string.storage_permission, Toast.LENGTH_LONG).show();
+                    showToast(R.string.storage_permission);
                     if (!StoragePermissionHelper.shouldShowRequestPermissionRationale(this)) {
                         StoragePermissionHelper.launchPermissionSettings(this);
                     }
@@ -252,8 +259,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 break;
             case CameraPermissionHelper.CAMERA_PERMISSION_CODE:
                 if (!CameraPermissionHelper.hasCameraPermission(this)) {
-                    Toast.makeText(this, "Camera permission is needed to run this application", Toast.LENGTH_LONG)
-                            .show();
+                    showToast("Camera permission is needed to run this application");
                     if (!CameraPermissionHelper.shouldShowRequestPermissionRationale(this)) {
                         // Permission denied with checking "Do not ask again".
                         CameraPermissionHelper.launchPermissionSettings(this);
@@ -326,22 +332,37 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
             MotionEvent tap = tapHelper.poll();
             if (tap != null && camera.getTrackingState() == TrackingState.TRACKING) {
-                // Clears previous anchors; new anchor with each tap.
-                anchors.clear();
+
+                // Replace the anchor when there is a new one. If there is no new one, keep
+                // the existing one so that we can still render the model at the anchor
+                boolean needToReplaceAnchors = true;
 
                 for (HitResult hit : frame.hitTest(tap)) {
+
                     // Check if any plane was hit, and if it was hit inside the plane polygon
                     Trackable trackable = hit.getTrackable();
                     // Creates an anchor if a plane or an oriented point was hit.
-                    if ((trackable instanceof Plane && ((Plane) trackable).isPoseInPolygon(hit.getHitPose()))
-                            || (trackable instanceof Point
-                            && ((Point) trackable).getOrientationMode()
-                            == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL)) {
+                    if ((trackable instanceof Plane && ((Plane) trackable).isPoseInPolygon(hit.getHitPose())))
+
+                        // Don't allow the point case since the object orientation is inconsistent with the object on a plane
+                        // || (trackable instanceof Point
+                        // && ((Point) trackable).getOrientationMode()
+                        // == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL))
+                    {
                         // Adding an Anchor tells ARCore that it should track this position in
                         // space. This anchor is created on the Plane to place the 3D model
                         // in the correct position relative both to the world and to the plane.
 
+                        if (needToReplaceAnchors) {
+                            anchors.clear();
+                            needToReplaceAnchors = false;
+                        }
+
                         anchors.add(hit.createAnchor());
+
+                        // reset translate factor since we use a new anchor
+                        mTranslateFactor[0] = mTranslateFactor[1] = mTranslateFactor[2] = 0.0f;
+
                         break;
                     }
                 }
@@ -395,6 +416,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
             // Visualize anchors created by touch.
             for (Anchor anchor : anchors) {
+
+                //Log.d("ANCHOR", anchor.hashCode() + ": POSE = " + anchor.getPose().toString());
+
                 if (anchor.getTrackingState() != TrackingState.TRACKING) {
                     continue;
                 }
@@ -403,34 +427,94 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 anchor.getPose().toMatrix(anchorMatrix, 0);
 
                 // Load the new obj files if any
-                if (datasetDrawRequested) {
-                    datasetDrawRequested = false;
+                if (objFilesLoadRequested) {
+
+                    objFilesLoadRequested = false;
                     try {
                         List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
-                        //objFiles = objFiles.subList(2, 3);
+                        int numObjFiles = objFiles.size();
+
+                        if (numObjFiles == 0) {
+                            showToast("No assets to load from file");
+                        } else if (numObjFiles == 1) {
+                            showToast("Loading the asset from file...");
+                        } else {
+                            showToast("Loading " + objFiles.size() + " assets from file...");
+                        }
+
                         objectRenderer.loadObjFiles(this, objFiles);
                     } catch (IOException e) {
-                            Log.e(TAG, "Failed to read an asset file", e);
+                        Log.e(TAG, "Failed to read an asset file", e);
+                        showToast("ERROR: Failed to read assets from file");
                     }
                 }
 
-                // Update the model matrix
-                objectRenderer.updateModelMatrix(anchorMatrix, mScaleFactor, mRotateAngle);
+                objectRenderer.updateBuffers();
 
-                // Draw the model
-                // Draw Opaque first and then transparent objects
-                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, EnumSet.of(ObjectRenderer.RenderingOptions.DRAW_OPAQUE));
-                objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, EnumSet.of(ObjectRenderer.RenderingOptions.DRAW_TRANSPARENT));
+                if (objectRenderer.isInitialized()) {
+
+                    // Calculate move delta
+                    float scrollDeltaX = tapHelper.scrollDeltaX();
+                    float scrollDeltaY = tapHelper.scrollDeltaY();
+
+                    // clear the delta
+                    tapHelper.resetScrollDelta();
+
+                    if (scrollDeltaX != 0.f || scrollDeltaY != 0.f) {
+                        mTranslateFactor[0] = mTranslateFactor[0] + (scrollDeltaX * kTranslationMultiplier);
+                        mTranslateFactor[1] = mTranslateFactor[1] - (scrollDeltaY * kTranslationMultiplier);
+                    }
+
+                    // Update the model matrix
+                    objectRenderer.updateModelMatrix(anchorMatrix, mTranslateFactor, mScaleFactor, mRotateAngle);
+
+                    // Draw the model
+                    // Draw Opaque first and then transparent objects
+                    objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, EnumSet.of(ObjectRenderer.RenderingOptions.DRAW_OPAQUE));
+                    objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, EnumSet.of(ObjectRenderer.RenderingOptions.DRAW_TRANSPARENT));
+                }
             }
 
         } catch (Throwable t) {
             // Avoid crashing the application due to unhandled exceptions.
             Log.e(TAG, "Exception on the OpenGL thread", t);
+            showToast("ERROR: Unable to place an anchor");
         }
+    }
+
+    private void showToast(final String message) {
+        final ARActivity context = this;
+        context.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (context.currentToast != null) {
+                    context.currentToast.cancel();
+                }
+
+                context.currentToast = Toast.makeText(context, message, Toast.LENGTH_LONG);
+                context.currentToast.show();
+            }
+        });
+    }
+
+    private void showToast(final int resId) {
+        final ARActivity context = this;
+        context.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (context.currentToast != null) {
+                    context.currentToast.cancel();
+                }
+
+                context.currentToast = Toast.makeText(context, resId, Toast.LENGTH_LONG);
+                context.currentToast.show();
+            }
+        });
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
+
         mScaleDetector.onTouchEvent(ev);
         // Get scale factor for scaling object
         mScaleFactor = mScaleListener.getmScaleFactor();
@@ -459,6 +543,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 uri = resultData.getData();
                 resultData.setAction(Intent.ACTION_OPEN_DOCUMENT);
                 Log.i(TAG, "Uri: " + uri.toString());
+
+                // Reset all transformation and model before taking time to load another model
+                reload();
+                objectRenderer.reset();
 
                 // Call anon AsyncTask to unzip files in background
                 new UnzipTask().execute(resultData);
@@ -524,6 +612,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
         mRotateAngle = 0.0f;
         mRotateListener.setmRotationDegrees(0.0f);
+
+        mTranslateFactor[0] = mTranslateFactor[1] = mTranslateFactor[2] = 0.0f;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -589,17 +679,49 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
         @Override
         protected void onPostExecute(Boolean result) {
-            datasetDrawRequested = result;
+
+            fileUnzippedSuccessfully = result;
+            if (fileUnzippedSuccessfully) {
+                List<File> objFiles = new FileFinder(".obj").find(tempDirectory());
+                objFilesLoadRequested = !objFiles.isEmpty();
+            }
+
             if (exception == null) {
-                if (runTask) {
-                    Toast.makeText(ARActivity.this, "Finished loading FMEAR file...", Toast.LENGTH_LONG).show();
+
+                if (objFilesLoadRequested) {
+                    showToast("File read successfully");
+                    Log.e(TAG, "Finished unzipping FMEAR file..");
                 }
-                Log.e(TAG, "Finished unzipping FMEAR file..");
+
             } else {
-                Toast.makeText(ARActivity.this, exception.getMessage(), Toast.LENGTH_LONG).show();
+                showToast("ERROR: " + exception.getMessage());
             }
             progressBar.setVisibility(View.INVISIBLE);
-            runTask = true;
+
+        }
+
+        // -----------------------------------------------------------------------------------------
+        // REFERENCE: https://developer.android.com/guide/topics/providers/document-provider
+        public String getFileName(Uri uri) {
+            String result = null;
+            if (uri.getScheme().equals("content")) {
+                Cursor cursor = getContentResolver().query(uri, null, null, null, null);
+                try {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        result = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME));
+                    }
+                } finally {
+                    cursor.close();
+                }
+            }
+            if (result == null) {
+                result = uri.getPath();
+                int cut = result.lastIndexOf('/');
+                if (cut != -1) {
+                    result = result.substring(cut + 1);
+                }
+            }
+            return result;
         }
 
         // -----------------------------------------------------------------------------------------
@@ -620,6 +742,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     if (uri == null) {
                         return false;
                     }
+
+                    showToast("Reading " + getFileName(uri) + "...");
+
                     // Get the temp directory
                     File tempDir = tempDirectory();
                     initDirectory(tempDir);
@@ -639,9 +764,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     for (File file : objFiles) {
                         Log.d("FME AR", "OBJ File: " + file.toString());
                     }
+                    return true;
                 }
             }
-            return true;
+            return false;
         }
 
         // -----------------------------------------------------------------------------------------
