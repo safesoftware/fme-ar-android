@@ -336,11 +336,12 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 Log.e("ANCHOR", "BEGIN AUTO ANCHOR");
                 for (Trackable trackable: session.getAllTrackables(Plane.class)) {
                     Log.e("ANCHOR", "TRACKABLE");
-                    if (trackable instanceof Plane) {
+                    if (trackable instanceof Plane && trackable.getTrackingState() == TrackingState.TRACKING) {
                         Log.e("ANCHOR", "PLANE");
                         Plane plane = (Plane)trackable;
                         Pose centerPose = plane.getCenterPose();
                         Anchor centerAnchor = plane.createAnchor(centerPose);
+                        anchors.clear();
                         anchors.add(centerAnchor);
                         Log.e("ANCHOR", "ANCHOR ADDED");
 
@@ -590,6 +591,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Reset all transformation and model before taking time to load another model
                 reload();
                 objectRenderer.reset();
+
+                // Also remove the anchors that are used for previous models so that we can
+                // auto create a new one on a tracking plane.
+                anchors.clear();
 
                 // Call anon AsyncTask to unzip files in background
                 new UnzipTask().execute(resultData);
@@ -880,7 +885,11 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     }
 
     @Override
-    public void objFilesLoaded() {
-        hideToast();
+    public void objFilesLoaded(int numFilesLoaded, int totalNumFiles) {
+        if (numFilesLoaded < totalNumFiles) {
+            showToast("" + numFilesLoaded + " of " + totalNumFiles + " assets loaded");
+        } else {
+            hideToast();
+        }
     }
 }

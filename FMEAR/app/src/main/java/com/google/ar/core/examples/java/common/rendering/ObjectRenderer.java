@@ -58,7 +58,7 @@ import de.javagl.obj.Objs;
 public class ObjectRenderer {
 
   public interface ObjFilesLoadedDelegate {
-    public void objFilesLoaded();
+    public void objFilesLoaded(int numFilesLoaded, int totalNumFiles);
   }
 
   public enum RenderingOptions {
@@ -354,6 +354,7 @@ public class ObjectRenderer {
       ArrayList<ObjProperty> result = new ArrayList<>(files.length);
 
       // Read each obj file
+      int numFilesLoaded = 0;
       for (File objFile : files)
       {
         // Read the obj file.
@@ -465,6 +466,9 @@ public class ObjectRenderer {
         {
           Log.e("ObjectRenderer", "Exception caught: ", e);
         }
+
+        ++numFilesLoaded;
+        delegate.objFilesLoaded(numFilesLoaded, files.length);
       }
 
 
@@ -476,7 +480,6 @@ public class ObjectRenderer {
 
       objProperties = result;
       buffersNeedUpdate = true;
-      delegate.objFilesLoaded();
     }
   }
 
