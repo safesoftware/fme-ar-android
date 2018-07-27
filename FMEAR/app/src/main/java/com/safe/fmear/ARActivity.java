@@ -333,17 +333,13 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             // should generate an anchor so that the model can be displayed at the anchor
             // automatically without user tapping on the plane.
             if (objFilesLoadRequested && anchors.isEmpty()) {
-                Log.e("ANCHOR", "BEGIN AUTO ANCHOR");
                 for (Trackable trackable: session.getAllTrackables(Plane.class)) {
-                    Log.e("ANCHOR", "TRACKABLE");
                     if (trackable instanceof Plane && trackable.getTrackingState() == TrackingState.TRACKING) {
-                        Log.e("ANCHOR", "PLANE");
                         Plane plane = (Plane)trackable;
                         Pose centerPose = plane.getCenterPose();
                         Anchor centerAnchor = plane.createAnchor(centerPose);
                         anchors.clear();
                         anchors.add(centerAnchor);
-                        Log.e("ANCHOR", "ANCHOR ADDED");
 
                         // reset translate factor since we use a new anchor
                         mTranslateFactor[0] = mTranslateFactor[1] = mTranslateFactor[2] = 0.0f;
@@ -353,7 +349,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                         break;
                     }
                 }
-                Log.e("ANCHOR", "END AUTO ANCHOR");
             }
 
             // Handle taps. Handling only one tap per frame, as taps are usually low frequency
@@ -572,7 +567,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
-        Log.i(TAG, "Received an \"Activity Result\"");
         // BEGIN_INCLUDE (parse_open_document_response)
         // The ACTION_OPEN_DOCUMENT intent was sent with the request code READ_REQUEST_CODE.
         // If the request code seen here doesn't match, it's the response to some other intent,
@@ -738,7 +732,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
                 if (objFilesLoadRequested) {
                     showToast("File read successfully");
-                    Log.e(TAG, "Finished unzipping FMEAR file..");
                 }
 
             } else {
