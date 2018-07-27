@@ -57,6 +57,10 @@ import de.javagl.obj.Objs;
 /** Renders an object loaded from an OBJ file in OpenGL. */
 public class ObjectRenderer {
 
+  public interface ObjFilesLoadedDelegate {
+    public void objFilesLoaded();
+  }
+
   public enum RenderingOptions {
     DRAW_OPAQUE,
     DRAW_TRANSPARENT
@@ -246,13 +250,13 @@ public class ObjectRenderer {
   private final float[] modelViewMatrix = new float[16];
   private final float[] modelViewProjectionMatrix = new float[16];
 
-  private boolean initialized = false;
-
   private Context context;
+  private boolean initialized = false;
   private boolean buffersNeedUpdate = false;
 
+  public ObjectRenderer(Context context) {
 
-  public ObjectRenderer() {
+    this.context = context;
     Matrix.setIdentityM(modelMatrix, 0);
   }
 
@@ -335,6 +339,14 @@ public class ObjectRenderer {
   public boolean isInitialized() { return initialized; }
 
   private class ObjFilesAsyncLoader extends AsyncTask<File, Integer, ArrayList<ObjProperty>> {
+
+    private Context context;
+    private ObjFilesLoadedDelegate delegate;
+
+    public ObjFilesAsyncLoader(Context context, ObjFilesLoadedDelegate delegate) {
+      this.context = context;
+      this.delegate = delegate;
+    }
 
     @Override
     protected ArrayList<ObjProperty> doInBackground(File... files) {
@@ -464,6 +476,7 @@ public class ObjectRenderer {
 
       objProperties = result;
       buffersNeedUpdate = true;
+      delegate.objFilesLoaded();
     }
   }
 
@@ -532,15 +545,12 @@ public class ObjectRenderer {
     initialized = true;
   }
 
-  public void loadObjFiles(Context context, List<File> files)
+  public void loadObjFiles(List<File> files, ObjFilesLoadedDelegate delegate)
           throws IOException {
 
     if (files.isEmpty()) {
       return;
     }
-
-    // Remember the context so that the obj file async loader can access it.
-    this.context = context;
 
     // Clear previous obj models
     initialized = false;
@@ -549,7 +559,7 @@ public class ObjectRenderer {
     buffersNeedUpdate = false;
 
     // Run the obj file asyn loader
-    new ObjFilesAsyncLoader().execute(files.toArray(new File[files.size()]));
+    new ObjFilesAsyncLoader(context, delegate).execute(files.toArray(new File[files.size()]));
   }
 
   private boolean containsColor(FloatTuple rgb) {
