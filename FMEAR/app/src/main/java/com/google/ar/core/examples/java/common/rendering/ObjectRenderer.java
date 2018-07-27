@@ -21,6 +21,8 @@ import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLUtils;
 import android.opengl.Matrix;
+import android.os.AsyncTask;
+import android.util.Log;
 
 import com.safe.fmear.FileFinder;
 
@@ -150,6 +152,14 @@ public class ObjectRenderer {
 
     private static class MaterialProperty
     {
+      void clearTemporaryFileHandlesAndBuffers() {
+        textureFile = null;
+        wideIndices = null;
+        vertices = null;
+        texCoords = null;
+        normals = null;
+      }
+
       public String materialName;
 
       public Bounds bounds = new Bounds();
@@ -175,6 +185,14 @@ public class ObjectRenderer {
       // matches default values in DefaultMtl.java
       private float shininess = 100f;
       private float opacity = 1.0f;
+
+      // Temporary members that are set in ObjFilesAsyncLoader and are only used in updateBuffers.
+      // To minimize memory usage, these members will be cleared in updateBuffers after use.
+      public File textureFile;
+      private IntBuffer wideIndices;
+      private FloatBuffer vertices;
+      private FloatBuffer texCoords;
+      private FloatBuffer normals;
     }
 
     public String objFilename;
@@ -229,6 +247,9 @@ public class ObjectRenderer {
   private final float[] modelViewProjectionMatrix = new float[16];
 
   private boolean initialized = false;
+
+  private Context context;
+  private boolean buffersNeedUpdate = false;
 
 
   public ObjectRenderer() {
@@ -311,6 +332,206 @@ public class ObjectRenderer {
     initialized = false;
   }
 
+  public boolean isInitialized() { return initialized; }
+
+  private class ObjFilesAsyncLoader extends AsyncTask<File, Integer, ArrayList<ObjProperty>> {
+
+    @Override
+    protected ArrayList<ObjProperty> doInBackground(File... files) {
+
+      ArrayList<ObjProperty> result = new ArrayList<>(files.length);
+
+      // Read each obj file
+      for (File objFile : files)
+      {
+        // Read the obj file.
+        try (InputStream objInputStream = context.getContentResolver().openInputStream(Uri.fromFile(objFile))) {
+          if (objInputStream == null) {
+            // nothing to load, move on
+            return null;
+          }
+
+          Obj objObject = ObjReader.read(objInputStream);
+          Map<String, MtlAndTexture> materialsByName = fetchMaterials(objObject, context, objFile.getParentFile());
+
+          // Prepare the Obj so that its structure is suitable for
+          // rendering with OpenGL:
+          // 1. Triangulate it
+          // 2. Make sure that texture coordinates are not ambiguous
+          // 3. Make sure that normals are not ambiguous
+          // 4. Convert it to single-indexed data
+          Obj obj = ObjUtils.triangulate(objObject);
+          if (obj.getNumNormals() <= 0) {
+            obj = createNewObjWithNormals(obj);
+          }
+          obj = ObjUtils.makeTexCoordsUnique(obj);
+          obj = ObjUtils.makeNormalsUnique(obj);
+          objObject = ObjUtils.makeVertexIndexed(obj, Objs.create());
+
+          // For every obj file, store the properties for later use
+          ObjProperty objProperty = new ObjProperty();
+          objProperty.objFilename = objFile.toString();
+          result.add(objProperty);
+
+          Map<String, Obj> materialToObjMap = ObjSplitting.splitByMaterialGroups(objObject);
+          if (materialToObjMap.isEmpty()) {
+            // If there is no material, we just simply add the original obj with an empty material
+            // name
+            materialToObjMap.put("", objObject);
+          }
+
+          int numMaterialGroups = materialToObjMap.size();
+          objProperty.materialProperties = new ArrayList<>(numMaterialGroups);
+
+          for (Map.Entry<String, Obj> entry : materialToObjMap.entrySet()) {
+
+            // Get the material name from the key and the obj object from the value
+            String materialName = entry.getKey();
+            Obj currObj = entry.getValue();
+
+            // Create a material property record in the obj property
+            ObjProperty.MaterialProperty materialProperty = new ObjProperty.MaterialProperty();
+            objProperty.materialProperties.add(materialProperty);
+            materialProperty.materialName = materialName;
+
+            // If we can read a material and or a texture, we store it in the property.
+            MtlAndTexture mtlAndTexture = materialsByName.get(materialName);
+            if (mtlAndTexture != null) {
+              Mtl material = mtlAndTexture.getMtl();
+              File textureFile = mtlAndTexture.getTextureFile();
+              if (textureFile != null && textureFile.exists()) {
+                materialProperty.textureFile = textureFile;
+                materialProperty.hasTexture = true;
+              }
+              if (material != null) {
+                FloatTuple ka = material.getKa();
+                FloatTuple kd = material.getKd();
+
+                if (!containsColor(ka) && !containsColor(kd)) { // pitch black, probably simply undefined
+                  if (materialProperty.hasTexture) {
+                    materialProperty.ambient = FloatTuples.create(1.0f, 1.0f, 1.0f);
+                    materialProperty.diffuse = kd;
+                  } else {
+                    materialProperty.ambient = createDefaultAmbient();
+                    materialProperty.diffuse = createDefaultDiffuse();
+                  }
+                } else {
+                  materialProperty.ambient = ka;
+                  materialProperty.diffuse = kd;
+                }
+
+                materialProperty.specular = material.getKs();
+                materialProperty.shininess = material.getNs();
+                materialProperty.opacity = material.getD();
+              }
+            }
+
+            // OpenGL does not use Java arrays. ByteBuffers are used instead to provide data in a format
+            // that OpenGL understands.
+
+            // Obtain the data from the OBJ, as direct buffers:
+            materialProperty.wideIndices = ObjData.getFaceVertexIndices(currObj, 3);
+            materialProperty.vertices = ObjData.getVertices(currObj);
+            materialProperty.texCoords = ObjData.getTexCoords(currObj, 2);
+            materialProperty.normals = ObjData.getNormals(currObj);
+
+            // Calculate the material property bounds. Also expand the obj property bounds.
+            materialProperty.bounds = calculateBounds(materialProperty.vertices);
+            objProperty.bounds.expandBy(materialProperty.bounds);
+
+            // Load vertex buffer
+            materialProperty.numVertices = materialProperty.vertices.limit() / 3;
+            materialProperty.numTexCoords = materialProperty.texCoords.limit() / 3;
+            materialProperty.numNormals = materialProperty.normals.limit() / 3;
+
+            materialProperty.verticesBaseAddress = 0;
+            materialProperty.texCoordsBaseAddress = materialProperty.verticesBaseAddress + 4 * materialProperty.vertices.limit();
+            materialProperty.normalsBaseAddress = materialProperty.texCoordsBaseAddress + 4 * materialProperty.texCoords.limit();
+          }
+        }
+        catch (IOException e)
+        {
+          Log.e("ObjectRenderer", "Exception caught: ", e);
+        }
+      }
+
+
+      return result;
+    }
+
+    @Override
+    protected void onPostExecute(ArrayList<ObjProperty> result) {
+
+      objProperties = result;
+      buffersNeedUpdate = true;
+    }
+  }
+
+  public void updateBuffers() {
+    if (!buffersNeedUpdate) {
+      return;
+    }
+
+    // reset flag
+    buffersNeedUpdate = false;
+
+    // reset bounds since we are going to recalculate it
+    datasetBounds.reset();
+
+    for (ObjProperty objProperty : objProperties) {
+
+      datasetBounds.expandBy(objProperty.bounds);
+
+      for (ObjProperty.MaterialProperty materialProperty : objProperty.materialProperties) {
+
+        if (materialProperty.textureFile != null && materialProperty.textureFile.exists()) {
+          try {
+            materialProperty.textureId = loadTexture(context, materialProperty.textureFile);
+          }
+          catch (IOException e) {
+            Log.e("ObjFileAsyncLoader", "Exception caught during texture loading", e);
+          }
+        }
+
+        int[] buffers = new int[2];
+        GLES20.glGenBuffers(2, buffers, 0);
+        materialProperty.vertexBufferId = buffers[0];
+        materialProperty.indexBufferId = buffers[1];
+
+        final int totalBytes = materialProperty.normalsBaseAddress + 4 * materialProperty.normals.limit();
+
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, materialProperty.vertexBufferId);
+        GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, totalBytes, null, GLES20.GL_STATIC_DRAW);
+        if (materialProperty.vertices.limit() > 0) {
+          GLES20.glBufferSubData(
+                  GLES20.GL_ARRAY_BUFFER, materialProperty.verticesBaseAddress, 4 * materialProperty.vertices.limit(), materialProperty.vertices);
+        }
+        if (materialProperty.texCoords.limit() > 0) {
+          GLES20.glBufferSubData(
+                  GLES20.GL_ARRAY_BUFFER, materialProperty.texCoordsBaseAddress, 4 * materialProperty.texCoords.limit(), materialProperty.texCoords);
+        }
+        if (materialProperty.normals.limit() > 0) {
+          GLES20.glBufferSubData(
+                  GLES20.GL_ARRAY_BUFFER, materialProperty.normalsBaseAddress, 4 * materialProperty.normals.limit(), materialProperty.normals);
+        }
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+
+        // Load index buffer
+        materialProperty.indexCount = materialProperty.wideIndices.limit();
+        if (materialProperty.indexCount > 0) {
+          GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, materialProperty.indexBufferId);
+          GLES20.glBufferData(
+                  GLES20.GL_ELEMENT_ARRAY_BUFFER, 4 * materialProperty.indexCount, materialProperty.wideIndices, GLES20.GL_STATIC_DRAW);
+          GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
+        }
+
+        materialProperty.clearTemporaryFileHandlesAndBuffers();
+      }
+    }
+
+    initialized = true;
+  }
+
   public void loadObjFiles(Context context, List<File> files)
           throws IOException {
 
@@ -318,157 +539,17 @@ public class ObjectRenderer {
       return;
     }
 
-    // TODO: Temporarily using this boolean to decide whether we want to draw or not.
-    initialized = true;
+    // Remember the context so that the obj file async loader can access it.
+    this.context = context;
 
-    objProperties = new ArrayList<>(files.size());
+    // Clear previous obj models
+    initialized = false;
     datasetBounds.reset();
+    objProperties = null;
+    buffersNeedUpdate = false;
 
-    // Read each obj file
-    for (File objFile : files)
-    {
-      // Read the obj file.
-      try (InputStream objInputStream = context.getContentResolver().openInputStream(Uri.fromFile(objFile))) {
-        if (objInputStream == null) {
-          // nothing to load, move on
-          return;
-        }
-
-        Obj objObject = ObjReader.read(objInputStream);
-        Map<String, MtlAndTexture> materialsByName = fetchMaterials(objObject, context, objFile.getParentFile());
-
-        // Prepare the Obj so that its structure is suitable for
-        // rendering with OpenGL:
-        // 1. Triangulate it
-        // 2. Make sure that texture coordinates are not ambiguous
-        // 3. Make sure that normals are not ambiguous
-        // 4. Convert it to single-indexed data
-        Obj obj = ObjUtils.triangulate(objObject);
-        if (obj.getNumNormals() <= 0) {
-          obj = createNewObjWithNormals(obj);
-        }
-        obj = ObjUtils.makeTexCoordsUnique(obj);
-        obj = ObjUtils.makeNormalsUnique(obj);
-        objObject = ObjUtils.makeVertexIndexed(obj, Objs.create());
-
-        // For every obj file, store the properties for later use
-        ObjProperty objProperty = new ObjProperty();
-        objProperty.objFilename = objFile.toString();
-        objProperties.add(objProperty);
-
-        Map<String, Obj> materialToObjMap = ObjSplitting.splitByMaterialGroups(objObject);
-        if (materialToObjMap.isEmpty()) {
-          // If there is no material, we just simply add the original obj with an empty material
-          // name
-          materialToObjMap.put("", objObject);
-        }
-
-        int numMaterialGroups = materialToObjMap.size();
-        objProperty.materialProperties = new ArrayList<>(numMaterialGroups);
-
-        for (Map.Entry<String, Obj> entry : materialToObjMap.entrySet()) {
-
-          // Get the material name from the key and the obj object from the value
-          String materialName = entry.getKey();
-          Obj currObj = entry.getValue();
-
-          // Create a material property record in the obj property
-          ObjProperty.MaterialProperty materialProperty = new ObjProperty.MaterialProperty();
-          objProperty.materialProperties.add(materialProperty);
-          materialProperty.materialName = materialName;
-
-          // If we can read a material and or a texture, we store it in the property.
-          MtlAndTexture mtlAndTexture = materialsByName.get(materialName);
-          if (mtlAndTexture != null) {
-            Mtl material = mtlAndTexture.getMtl();
-            File textureFile = mtlAndTexture.getTextureFile();
-            if (textureFile != null && textureFile.exists()) {
-              materialProperty.textureId = loadTexture(context, textureFile);
-              materialProperty.hasTexture = true;
-            }
-            if (material != null) {
-              FloatTuple ka = material.getKa();
-              FloatTuple kd = material.getKd();
-
-              if (!containsColor(ka) && !containsColor(kd)) { // pitch black, probably simply undefined
-                if (materialProperty.hasTexture) {
-                  materialProperty.ambient = FloatTuples.create(1.0f, 1.0f, 1.0f);
-                  materialProperty.diffuse = kd;
-                } else {
-                  materialProperty.ambient = createDefaultAmbient();
-                  materialProperty.diffuse = createDefaultDiffuse();
-                }
-              } else {
-                materialProperty.ambient = ka;
-                materialProperty.diffuse = kd;
-              }
-
-              materialProperty.specular = material.getKs();
-              materialProperty.shininess = material.getNs();
-              materialProperty.opacity = material.getD();
-            }
-          }
-
-          // OpenGL does not use Java arrays. ByteBuffers are used instead to provide data in a format
-          // that OpenGL understands.
-
-          // Obtain the data from the OBJ, as direct buffers:
-          IntBuffer wideIndices = ObjData.getFaceVertexIndices(currObj, 3);
-          FloatBuffer vertices = ObjData.getVertices(currObj);
-          FloatBuffer texCoords = ObjData.getTexCoords(currObj, 2);
-
-          FloatBuffer normals = ObjData.getNormals(currObj);
-
-          // Calculate the material property bounds. Also expand the obj property bounds.
-          materialProperty.bounds = calculateBounds(vertices);
-          objProperty.bounds.expandBy(materialProperty.bounds);
-
-          int[] buffers = new int[2];
-          GLES20.glGenBuffers(2, buffers, 0);
-          materialProperty.vertexBufferId = buffers[0];
-          materialProperty.indexBufferId = buffers[1];
-
-          // Load vertex buffer
-          materialProperty.numVertices = vertices.limit() / 3;
-          materialProperty.numTexCoords = texCoords.limit() / 3;
-          materialProperty.numNormals = normals.limit() / 3;
-
-          materialProperty.verticesBaseAddress = 0;
-          materialProperty.texCoordsBaseAddress = materialProperty.verticesBaseAddress + 4 * vertices.limit();
-          materialProperty.normalsBaseAddress = materialProperty.texCoordsBaseAddress + 4 * texCoords.limit();
-          final int totalBytes = materialProperty.normalsBaseAddress + 4 * normals.limit();
-
-          GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, materialProperty.vertexBufferId);
-          GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, totalBytes, null, GLES20.GL_STATIC_DRAW);
-          if (vertices.limit() > 0) {
-            GLES20.glBufferSubData(
-                    GLES20.GL_ARRAY_BUFFER, materialProperty.verticesBaseAddress, 4 * vertices.limit(), vertices);
-          }
-          if (texCoords.limit() > 0) {
-            GLES20.glBufferSubData(
-                    GLES20.GL_ARRAY_BUFFER, materialProperty.texCoordsBaseAddress, 4 * texCoords.limit(), texCoords);
-          }
-          if (normals.limit() > 0) {
-            GLES20.glBufferSubData(
-                    GLES20.GL_ARRAY_BUFFER, materialProperty.normalsBaseAddress, 4 * normals.limit(), normals);
-          }
-          GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
-
-          // Load index buffer
-          materialProperty.indexCount = wideIndices.limit();
-          if (materialProperty.indexCount > 0) {
-            GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, materialProperty.indexBufferId);
-            GLES20.glBufferData(
-                    GLES20.GL_ELEMENT_ARRAY_BUFFER, 4 * materialProperty.indexCount, wideIndices, GLES20.GL_STATIC_DRAW);
-            GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
-          }
-
-          ShaderUtil.checkGLError(TAG, "OBJ buffer load");
-        }
-
-        datasetBounds.expandBy(objProperty.bounds);
-      }
-    }
+    // Run the obj file asyn loader
+    new ObjFilesAsyncLoader().execute(files.toArray(new File[files.size()]));
   }
 
   private boolean containsColor(FloatTuple rgb) {
