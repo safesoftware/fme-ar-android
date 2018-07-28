@@ -27,6 +27,7 @@ import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.core.PointCloud;
+import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
 import com.google.ar.core.TrackingState;
@@ -64,7 +65,7 @@ import javax.microedition.khronos.opengles.GL10;
 
 // =================================================================================================
 // ARActivity
-public class ARActivity extends AppCompatActivity implements GLSurfaceView.Renderer {
+public class ARActivity extends AppCompatActivity implements GLSurfaceView.Renderer, ObjectRenderer.ObjFilesLoadedDelegate {
     private static final String TAG = ARActivity.class.getSimpleName();
 
     // Rendering. The Renderers are created here, and initialized when the GL surface is created.
@@ -78,8 +79,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     private TapHelper tapHelper;
 
     private final BackgroundRenderer backgroundRenderer = new BackgroundRenderer();
-    private final ObjectRenderer virtualObject = new ObjectRenderer();
-    private final ObjectRenderer objectRenderer = new ObjectRenderer();
+    private final ObjectRenderer objectRenderer = new ObjectRenderer(this);
     private final PlaneRenderer planeRenderer = new PlaneRenderer();
     private final PointCloudRenderer pointCloudRenderer = new PointCloudRenderer();
 
@@ -302,6 +302,8 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         GLES20.glViewport(0, 0, width, height);
     }
 
+
+
     @Override
     public void onDrawFrame(GL10 gl) {
         // Clear screen to notify driver it should not load any pixels from previous frame.
@@ -327,9 +329,30 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
             Frame frame = session.update();
             Camera camera = frame.getCamera();
 
+            // If there is no anchors on the detected plane yet and the obj model is ready, we
+            // should generate an anchor so that the model can be displayed at the anchor
+            // automatically without user tapping on the plane.
+            if (objFilesLoadRequested && anchors.isEmpty()) {
+                for (Trackable trackable: session.getAllTrackables(Plane.class)) {
+                    if (trackable instanceof Plane && trackable.getTrackingState() == TrackingState.TRACKING) {
+                        Plane plane = (Plane)trackable;
+                        Pose centerPose = plane.getCenterPose();
+                        Anchor centerAnchor = plane.createAnchor(centerPose);
+                        anchors.clear();
+                        anchors.add(centerAnchor);
+
+                        // reset translate factor since we use a new anchor
+                        mTranslateFactor[0] = mTranslateFactor[1] = mTranslateFactor[2] = 0.0f;
+
+                        showToast("Anchoring model...");
+
+                        break;
+                    }
+                }
+            }
+
             // Handle taps. Handling only one tap per frame, as taps are usually low frequency
             // compared to frame rate.
-
             MotionEvent tap = tapHelper.poll();
             if (tap != null && camera.getTrackingState() == TrackingState.TRACKING) {
 
@@ -416,9 +439,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
             // Visualize anchors created by touch.
             for (Anchor anchor : anchors) {
-
-                //Log.d("ANCHOR", anchor.hashCode() + ": POSE = " + anchor.getPose().toString());
-
                 if (anchor.getTrackingState() != TrackingState.TRACKING) {
                     continue;
                 }
@@ -442,7 +462,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                             showToast("Loading " + objFiles.size() + " assets from file...");
                         }
 
-                        objectRenderer.loadObjFiles(this, objFiles);
+                        objectRenderer.loadObjFiles(objFiles, this);
                     } catch (IOException e) {
                         Log.e(TAG, "Failed to read an asset file", e);
                         showToast("ERROR: Failed to read assets from file");
@@ -473,6 +493,9 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, EnumSet.of(ObjectRenderer.RenderingOptions.DRAW_OPAQUE));
                     objectRenderer.draw(viewmtx, projmtx, colorCorrectionRgba, EnumSet.of(ObjectRenderer.RenderingOptions.DRAW_TRANSPARENT));
                 }
+
+                // We only want to use the first anchor
+                break;
             }
 
         } catch (Throwable t) {
@@ -512,6 +535,22 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
         });
     }
 
+    private void hideToast() {
+        if (currentToast == null) {
+            return;
+        }
+
+        final ARActivity context = this;
+        context.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (context.currentToast != null) {
+                    context.currentToast.cancel();
+                }
+            }
+        });
+    }
+
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
 
@@ -528,7 +567,6 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
-        Log.i(TAG, "Received an \"Activity Result\"");
         // BEGIN_INCLUDE (parse_open_document_response)
         // The ACTION_OPEN_DOCUMENT intent was sent with the request code READ_REQUEST_CODE.
         // If the request code seen here doesn't match, it's the response to some other intent,
@@ -547,6 +585,10 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                 // Reset all transformation and model before taking time to load another model
                 reload();
                 objectRenderer.reset();
+
+                // Also remove the anchors that are used for previous models so that we can
+                // auto create a new one on a tracking plane.
+                anchors.clear();
 
                 // Call anon AsyncTask to unzip files in background
                 new UnzipTask().execute(resultData);
@@ -690,14 +732,12 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
 
                 if (objFilesLoadRequested) {
                     showToast("File read successfully");
-                    Log.e(TAG, "Finished unzipping FMEAR file..");
                 }
 
             } else {
                 showToast("ERROR: " + exception.getMessage());
             }
             progressBar.setVisibility(View.INVISIBLE);
-
         }
 
         // -----------------------------------------------------------------------------------------
@@ -834,6 +874,15 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     inputStream.close();
                 }
             }
+        }
+    }
+
+    @Override
+    public void objFilesLoaded(int numFilesLoaded, int totalNumFiles) {
+        if (numFilesLoaded < totalNumFiles) {
+            showToast("" + numFilesLoaded + " of " + totalNumFiles + " assets loaded");
+        } else {
+            hideToast();
         }
     }
 }
