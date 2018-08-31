@@ -11,6 +11,7 @@ This app is built on the Android augmented reality framework called ARCore. It a
 
 ## Requirements
 ARCore requires Android 7.0 or later and access to the Google Play Store. Here is a list of supported devices currently: https://developers.google.com/ar/discover/supported-devices
+
 ARCore download: https://play.google.com/store/apps/details?id=com.google.ar.core&hl=en
 
 ## Licenses
