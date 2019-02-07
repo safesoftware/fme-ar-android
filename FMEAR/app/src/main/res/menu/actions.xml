@@ -7,4 +7,9 @@
     <item
         android:id="@+id/reload"
         android:title="@string/reload"></item>
+
+    <item
+        android:checkable="true"
+        android:id="@+id/toggle_scale_lock"
+        android:title="Lock Scale"/>
 </menu>

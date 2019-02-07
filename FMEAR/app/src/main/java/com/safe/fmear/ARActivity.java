@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
@@ -104,6 +105,7 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     private ScaleListener mScaleListener;
     private ScaleGestureDetector mScaleDetector;
     private float mScaleFactor;
+    private boolean _scaleLocked;
 
     // Two finger rotation gesture detecting
     private RotationListener mRotateListener;
@@ -554,9 +556,11 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
 
-        mScaleDetector.onTouchEvent(ev);
-        // Get scale factor for scaling object
-        mScaleFactor = mScaleListener.getmScaleFactor();
+        if (!_scaleLocked) {
+            mScaleDetector.onTouchEvent(ev);
+            // Get scale factor for scaling object
+            mScaleFactor = mScaleListener.getmScaleFactor();
+        }
 
         mRotateDetector.onTouchEvent(ev);
         // Get angle for rotation
@@ -602,6 +606,13 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
     public void showPopup(View v) {
         final View view = v;
         PopupMenu popup = new PopupMenu(this, view);
+        MenuInflater inflater = popup.getMenuInflater();
+        Menu menu = popup.getMenu();
+        inflater.inflate(R.menu.actions, menu);
+
+        // set states of menu items
+        menu.findItem(R.id.toggle_scale_lock).setChecked(_scaleLocked);
+
         popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override
             public boolean onMenuItemClick(MenuItem item) {
@@ -612,13 +623,15 @@ public class ARActivity extends AppCompatActivity implements GLSurfaceView.Rende
                     case R.id.reload:
                         reload();
                         return true;
+                    case R.id.toggle_scale_lock:
+                        boolean isChecked = item.isChecked();
+                        _scaleLocked = !isChecked;
+                        return true;
                     default:
                         return false;
                 }
             }
         });
-        MenuInflater inflater = popup.getMenuInflater();
-        inflater.inflate(R.menu.actions, popup.getMenu());
         popup.show();
     }
 
