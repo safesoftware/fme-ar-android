@@ -1,7 +1,3 @@
 <resources>
     <string name="app_name">FME AR</string>
-    <string name="vertical_ellipsis">&#8942;</string>
-    <string name="browse_files">Browse Files</string>
-    <string name="reload">Reload</string>
-    <string name="storage_permission">Storage read access is needed to load local files</string>
 </resources>
