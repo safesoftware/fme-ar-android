@@ -47,4 +47,16 @@ class MainActivity : AppCompatActivity() {
 
         arSceneView.resume()
     }
+
+    override fun onPause() {
+        var arSceneView = arFragment?.arSceneView
+        arSceneView?.pause()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        var arSceneView = arFragment?.arSceneView
+        arSceneView?.destroy()
+        super.onDestroy()
+    }
 }
