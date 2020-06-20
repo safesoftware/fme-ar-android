@@ -41,6 +41,7 @@ class FMEARUtils {
                         return null
                     }
                     ArCoreApk.InstallStatus.INSTALLED -> { /* do nothing */ }
+                    else -> { /* do nothing */ }
                 }
 
                 session = Session(activity)
