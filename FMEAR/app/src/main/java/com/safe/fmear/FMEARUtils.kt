@@ -16,14 +16,19 @@ import com.google.ar.core.Config
 import com.google.ar.core.ArCoreApk
 
 class FMEARUtils {
+
+    enum class RequestCode(val code: Int) {
+        CAMERA(0x00000001),
+        OPEN_DOCUMENT(0x00000002)
+    }
+
     companion object {
 
         var arCoreInstallRequested: Boolean = false
-        var cameraRequestCode: Int = 0
 
         fun requestCameraPermission(activity: Activity) {
             ActivityCompat.requestPermissions(activity,
-                arrayOf(Manifest.permission.CAMERA), cameraRequestCode)
+                arrayOf(Manifest.permission.CAMERA), RequestCode.CAMERA.code)
         }
 
         /** Check if the context has the camera permission. */

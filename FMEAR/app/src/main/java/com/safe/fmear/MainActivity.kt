@@ -1,10 +1,15 @@
 package com.safe.fmear
 
 // OS
+import android.content.Intent
 import android.os.Bundle
 
 // App
 import androidx.appcompat.app.AppCompatActivity
+
+// UI
+import android.view.View
+import com.google.android.material.snackbar.Snackbar
 
 // ARCore
 import com.google.ar.core.Session
@@ -20,9 +25,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        setContentView(R.layout.ux_main_activity)
-        arFragment = this.supportFragmentManager.findFragmentById(R.id.ux_ar_fragment) as ArFragment?
+        setupUi()
     }
 
     override fun onResume() {
@@ -58,5 +61,24 @@ class MainActivity : AppCompatActivity() {
         var arSceneView = arFragment?.arSceneView
         arSceneView?.destroy()
         super.onDestroy()
+    }
+
+    fun setupUi() {
+
+        setContentView(R.layout.ux_main_activity)
+
+        arFragment = this.supportFragmentManager.findFragmentById(R.id.ux_ar_fragment) as ArFragment?
+
+        val fabAdd: View = findViewById(R.id.fab_add)
+        fabAdd.setOnClickListener { view ->
+            showFileBrowser(view)
+        }
+    }
+
+    fun showFileBrowser(view: View) {
+        var intent: Intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        intent.addCategory(Intent.CATEGORY_OPENABLE)
+        intent.setType("application/*")
+        startActivityForResult(intent, FMEARUtils.RequestCode.OPEN_DOCUMENT.code)
     }
 }
