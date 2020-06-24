@@ -18,8 +18,7 @@ import com.google.ar.core.ArCoreApk
 class FMEARUtils {
 
     enum class RequestCode(val code: Int) {
-        CAMERA(0x00000001),
-        OPEN_DOCUMENT(0x00000002)
+        CAMERA(0x00000001)
     }
 
     companion object {

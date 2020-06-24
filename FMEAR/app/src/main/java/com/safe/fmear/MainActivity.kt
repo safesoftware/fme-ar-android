@@ -6,6 +6,8 @@ import android.os.Bundle
 
 // App
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
 
 // UI
 import android.view.View
@@ -17,11 +19,25 @@ import com.google.ar.core.Config
 import com.google.ar.sceneform.ArSceneView
 import com.google.ar.sceneform.ux.ArFragment
 
+
 class MainActivity : AppCompatActivity() {
 
     // AR
     private var arSession: Session? = null
     private var arFragment: ArFragment? = null
+
+    // Contracts
+    private val openFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            this.arFragment?.view?.let {
+                Snackbar.make(
+                    it,
+                    "Opening file '$uri'",
+                    Snackbar.LENGTH_INDEFINITE
+                ).show()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -76,9 +92,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun showFileBrowser(view: View) {
-        var intent: Intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-        intent.addCategory(Intent.CATEGORY_OPENABLE)
-        intent.setType("application/*")
-        startActivityForResult(intent, FMEARUtils.RequestCode.OPEN_DOCUMENT.code)
+        openFile.launch(arrayOf("application/*"))
     }
 }
