@@ -5,6 +5,10 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.database.Cursor
+import android.net.Uri
+import android.provider.OpenableColumns
+import android.util.Log
 import androidx.core.app.ActivityCompat
 
 // AndroidX
@@ -59,5 +63,30 @@ class FMEARUtils {
 
             return session
         }
+
+        fun getDisplayName(context: Context, uri: Uri) : String? {
+
+            var displayName: String? = null
+
+            // The query, because it only applies to a single document, returns only
+            // one row. There's no need to filter, sort, or select fields,
+            // because we want all fields for one document.
+            val cursor: Cursor? = context.contentResolver.query(
+                uri, null, null, null, null, null)
+
+            cursor?.use {
+                // moveToFirst() returns false if the cursor has 0 rows. Very handy for
+                // "if there's anything to look at, look at it" conditionals.
+                if (it.moveToFirst()) {
+
+                    // Note it's called "Display Name". This is
+                    // provider-specific, and might not necessarily be the file name.
+                    displayName = it.getString(it.getColumnIndex(OpenableColumns.DISPLAY_NAME))
+                }
+            }
+
+            return displayName
+        }
+
     }
 }
