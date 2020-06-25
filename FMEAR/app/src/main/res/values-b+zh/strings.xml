@@ -3,8 +3,8 @@
     <string name="app_name">FME AR</string>
 
     <!-- Status: Opening file with a file name -->
-    <string name="opening_file">"Opening '%1$s' ..."</string>
+    <string name="opening_file">"正在打开 '%1$s' ..."</string>
 
     <!-- Warning: Unsupported file with a file name -->
-    <string name="unsupported_file">"The file '%1$s' is not supported. Please choose a FME AR file."</string>
+    <string name="unsupported_file">"无法打开文件 '%1$s'. 请选择一个 FME AR 文件."</string>
 </resources>

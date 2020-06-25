@@ -38,14 +38,14 @@ class MainActivity : AppCompatActivity() {
             if (fileName != null && fileName.endsWith(".fmear")) {
                 Snackbar.make(
                     findViewById(R.id.ux_main_activity_coordinator_layout),
-                    "Opening file '$fileName'",
+                    getString(R.string.opening_file, fileName),
                     Snackbar.LENGTH_INDEFINITE
                 ).show()
             } else {
                 val invalidFileName = if (fileName != null) "'$fileName' " else ""
                 Snackbar.make(
                     findViewById(R.id.ux_main_activity_coordinator_layout),
-                    "The file $invalidFileName is not supported. Please choose a fmear file",
+                    getString(R.string.unsupported_file, fileName),
                     Snackbar.LENGTH_INDEFINITE
                 ).show()
             }
