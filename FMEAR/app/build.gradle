@@ -62,4 +62,20 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'androidx.test.ext:junit:1.1.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
+
+    // Google Filament -----------------------------------------------------------------------------
+    // https://github.com/google/filament
+    // The Filament rendering engine itself
+    implementation 'com.google.android.filament:filament-android:1.9.5'
+
+    // A glTF 2.0 lloader for Filament, depends on filament-android
+    implementation 'com.google.android.filament:gltfio-android:1.9.5'
+
+    // KTX loading, Kotlin math, and camera utitlities, depends on gltfio-android
+    implementation 'com.google.android.filament:filament-utils-android:1.9.5'
+
+    // A runtime material builder/compiler. This libraryis large but contains a full shader
+    // compiler/validator/optimizer.
+    implementation 'com.google.android.filament:filamat-android:1.9.5'
+    // Google Filament -----------------------------------------------------------------------------
 }

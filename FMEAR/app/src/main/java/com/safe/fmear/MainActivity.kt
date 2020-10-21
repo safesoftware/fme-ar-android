@@ -22,8 +22,17 @@ import java.io.FileNotFoundException
 import java.io.InputStream
 import java.util.zip.ZipFile
 
+// Filament
+import com.google.android.filament.*
 
 class MainActivity : AppCompatActivity() {
+    // Make sure to initialize Filament first
+    // This loads the JNI library needed by most API calls
+    companion object {
+        init {
+            Filament.init()
+        }
+    }
 
     // Log
     private val TAG: String = MainActivity::class.simpleName!!
