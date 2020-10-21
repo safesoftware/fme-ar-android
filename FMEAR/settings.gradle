@@ -1,8 +1,2 @@
 include ':app'
 rootProject.name = "FME AR"
-
-include ':sceneform'
-project(':sceneform').projectDir=new File('sceneformsrc/sceneform')
-
-include ':sceneformux'
-project(':sceneformux').projectDir=new File('sceneformux/ux')

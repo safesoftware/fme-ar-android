@@ -18,7 +18,6 @@ import com.google.android.material.snackbar.Snackbar
 // ARCore
 import com.google.ar.core.Session
 import com.google.ar.core.Config
-import com.google.ar.sceneform.ux.ArFragment
 import java.io.FileNotFoundException
 import java.io.InputStream
 import java.util.zip.ZipFile
@@ -31,7 +30,6 @@ class MainActivity : AppCompatActivity() {
 
     // AR
     private var arSession: Session? = null
-    private var arFragment: ArFragment? = null
 
     // Contracts
     private val openFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -54,7 +52,6 @@ class MainActivity : AppCompatActivity() {
                     Snackbar.LENGTH_INDEFINITE
                 ).show()
             } else {
-                val invalidFileName = if (fileName != null) "'$fileName' " else ""
                 Snackbar.make(
                     findViewById(R.id.ux_main_activity_coordinator_layout),
                     getString(R.string.unsupported_file, fileName),
@@ -75,43 +72,19 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
 
-        var arSceneView = arFragment?.arSceneView
-        if (arSceneView == null) {
-            return
-        }
-
-        if (arSceneView.session == null) {
-            var session = FMEARUtils.createARSession(
-                this,
-                Config.LightEstimationMode.DISABLED
-            )
-            if (session == null) {
-                return
-            } else {
-                arSceneView.setupSession(session)
-            }
-        }
-
-        arSceneView.resume()
     }
 
     override fun onPause() {
-        var arSceneView = arFragment?.arSceneView
-        arSceneView?.pause()
         super.onPause()
     }
 
     override fun onDestroy() {
-        var arSceneView = arFragment?.arSceneView
-        arSceneView?.destroy()
         super.onDestroy()
     }
 
     fun setupUi() {
 
         setContentView(R.layout.ux_main_activity)
-
-        arFragment = this.supportFragmentManager.findFragmentById(R.id.ux_ar_fragment) as ArFragment?
 
         val fabAdd: View = findViewById(R.id.fab_add)
         fabAdd.setOnClickListener {
