@@ -19,6 +19,9 @@ import com.google.android.material.snackbar.Snackbar
 import com.google.ar.core.Session
 import com.google.ar.core.Config
 import com.google.ar.sceneform.ux.ArFragment
+import java.io.FileNotFoundException
+import java.io.InputStream
+import java.util.zip.ZipFile
 
 
 class MainActivity : AppCompatActivity() {
@@ -33,9 +36,18 @@ class MainActivity : AppCompatActivity() {
     // Contracts
     private val openFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            val fileName = FMEARUtils.getDisplayName(this, uri)
 
+            var fmearFileStream: InputStream? = null
+            val fileName = FMEARUtils.getDisplayName(this, uri)
             if (fileName != null && fileName.endsWith(".fmear")) {
+                try {
+                    fmearFileStream = contentResolver.openInputStream(uri)
+                } catch (e: FileNotFoundException) {
+                    fmearFileStream = null
+                }
+            }
+
+            if (fmearFileStream != null) {
                 Snackbar.make(
                     findViewById(R.id.ux_main_activity_coordinator_layout),
                     getString(R.string.opening_file, fileName),
@@ -49,6 +61,9 @@ class MainActivity : AppCompatActivity() {
                     Snackbar.LENGTH_INDEFINITE
                 ).show()
             }
+
+            // Get the zip file
+            FMEARUtils.extractData(this, uri)
         }
     }
 
